@@ -205,6 +205,11 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .btn-login:hover{opacity:.88}
 .btn-login:disabled{opacity:.4;cursor:not-allowed}
 .login-error{color:var(--red);font-size:12px;margin-top:10px;min-height:18px}
+.pass-wrap{position:relative;margin-bottom:12px}
+.pass-wrap .login-field{margin-bottom:0;padding-right:44px}
+.btn-eye{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;
+  color:rgba(241,240,255,0.4);cursor:pointer;font-size:16px;padding:4px;line-height:1;transition:color .2s}
+.btn-eye:hover{color:var(--gold-lt)}
 .login-user-badge{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;
   background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);border-radius:20px;
   font-size:11px;color:var(--gold-lt);cursor:pointer}
@@ -236,8 +241,11 @@ tr:hover td{background:rgba(255,255,255,.03)}
     <div class="login-sub">Dashboard Comercial</div>
     <input class="login-field" id="loginUser" type="text" placeholder="Usuário" autocomplete="username"
       onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
-    <input class="login-field" id="loginPass" type="password" placeholder="Senha" autocomplete="current-password"
-      onkeydown="if(event.key==='Enter')doLogin()">
+    <div class="pass-wrap">
+      <input class="login-field" id="loginPass" type="password" placeholder="Senha" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')doLogin()">
+      <button class="btn-eye" type="button" id="btnEye" onclick="(function(){var p=document.getElementById('loginPass'),e=document.getElementById('btnEye');p.type=p.type==='password'?'text':'password';e.textContent=p.type==='password'?'👁':'🙈';})()" title="Mostrar/ocultar senha">👁</button>
+    </div>
     <button class="btn-login" id="btnLogin" onclick="doLogin()">Entrar</button>
     <div class="login-error" id="loginError"></div>
   </div>
@@ -1067,8 +1075,10 @@ function calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps) {
     if (allowedReps && !allowedReps.has((nomevend||'').toUpperCase())) return;
     const real    = cli ? cli.rows.filter(r=>r._anomes===refAM).reduce((s,r)=>s+r.valor,0) : 0;
     const totalFat= cli ? cli.rows.reduce((s,r)=>s+r.valor,0) : 0;
+    const mesesCli= cli ? [...new Set(cli.rows.map(r=>r._anomes).filter(Boolean))].length : 0;
+    const _ticketMed = (mesesCli > 0) ? totalFat / mesesCli : 0;
     const pct     = metaVal > 0 ? +(real/metaVal*100).toFixed(1) : 0;
-    lCli.push({ nomecli, codcli, nomevend, _meta:metaVal, meta:fmtBRL(metaVal), _real:real, realizado:fmtBRL(real), _totalFat:totalFat, totalFaturado:fmtBRL(totalFat), pct:pct+'%', _pct:pct });
+    lCli.push({ nomecli, codcli, nomevend, _meta:metaVal, meta:fmtBRL(metaVal), _real:real, realizado:fmtBRL(real), _ticketMed, ticketMedio:fmtBRL(_ticketMed), pct:pct+'%', _pct:pct });
     if (!repMap.has(nomevend)) repMap.set(nomevend, {nomevend, _meta:0, _real:0});
     repMap.get(nomevend)._meta += metaVal;
     repMap.get(nomevend)._real += real;
@@ -1629,12 +1639,12 @@ function updateDOM(k, mesRef, repLabel) {
         .filter(function(r){return allowed.has((r.nomevend||'').toUpperCase());})
         .sort(function(a,b){return b._meta-a._meta;});
       const COLS_META_CLI_REP = [
-        {key:'nomecli',      label:'Cliente'},
-        {key:'codcli',       label:'Código'},
-        {key:'totalFaturado',label:'Total Faturado', rawKey:'_totalFat'},
-        {key:'meta',         label:'Meta',           rawKey:'_meta'},
-        {key:'realizado',    label:'Realizado Mês',  rawKey:'_real'},
-        {key:'pct',          label:'% Atingido',     rawKey:'_pct'}
+        {key:'nomecli',    label:'Cliente'},
+        {key:'codcli',     label:'Código'},
+        {key:'ticketMedio',label:'Ticket Médio',  rawKey:'_ticketMed'},
+        {key:'meta',       label:'Meta',          rawKey:'_meta'},
+        {key:'realizado',  label:'Realizado Mês', rawKey:'_real'},
+        {key:'pct',        label:'% Atingido',    rawKey:'_pct'}
       ];
       showModal('Meta por Cliente', lista, COLS_META_CLI_REP);
       return;
@@ -2630,12 +2640,12 @@ function _metaCliDrill(nvEnc) {
   var lista = _metaCliData.lCli.filter(function(r){return r.nomevend===nomevend;})
     .sort(function(a,b){return b._meta-a._meta;});
   var COLS_META_CLI = [
-    {key:'nomecli',      label:'Cliente'},
-    {key:'codcli',       label:'Código'},
-    {key:'totalFaturado',label:'Total Faturado', rawKey:'_totalFat'},
-    {key:'meta',         label:'Meta',           rawKey:'_meta'},
-    {key:'realizado',    label:'Realizado Mês',  rawKey:'_real'},
-    {key:'pct',          label:'% Atingido',     rawKey:'_pct'}
+    {key:'nomecli',    label:'Cliente'},
+    {key:'codcli',     label:'Código'},
+    {key:'ticketMedio',label:'Ticket Médio',  rawKey:'_ticketMed'},
+    {key:'meta',       label:'Meta',          rawKey:'_meta'},
+    {key:'realizado',  label:'Realizado Mês', rawKey:'_real'},
+    {key:'pct',        label:'% Atingido',    rawKey:'_pct'}
   ];
   showModal('Meta — '+nomevend, lista, COLS_META_CLI);
 }
