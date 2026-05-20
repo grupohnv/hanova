@@ -487,6 +487,12 @@ tr:hover td{background:rgba(255,255,255,.03)}
       </div>
     </div>
 
+    <!-- FAT CLIENTE VIEW (visível p/ representantes) -->
+    <div id="secFatCliView" style="display:none;margin-top:16px">
+      <div class="ct" style="margin-bottom:10px;font-size:14px;font-weight:700;color:var(--gold-lt)">📊 Faturamento por Cliente — Últimos 6 Meses</div>
+      <div class="card" style="padding:14px;overflow-x:auto"><div id="tblFatCliMensal"></div></div>
+    </div>
+
     <!-- GRÁFICOS PRINCIPAIS -->
     <div class="sec-title">📈 Evolução</div>
     <div class="g2">
@@ -579,10 +585,10 @@ tr:hover td{background:rgba(255,255,255,.03)}
         <div class="cbadge cwn">⚠ Pré-sinal de inatividade</div>
       </div>
       <div class="card kpi-card kr">
-        <div class="ct">Clientes que Diminuíram Ticket</div>
-        <div class="cv" id="kRedTicket" style="color:var(--red)">—</div>
-        <div class="cs" id="kRedTicketSub"></div>
-        <div class="cbadge cdn">▼ Perda de receita/cliente</div>
+        <div class="ct">Clientes Inativos 90+ dias</div>
+        <div class="cv" id="kInativos2" style="color:var(--red)">—</div>
+        <div class="cs" id="kInativos2Sub"></div>
+        <div class="cbadge cdn">▼ Sem compra há 90+ dias</div>
       </div>
     </div>
 
@@ -1322,10 +1328,19 @@ function calcSku(clienteMap) {
     const prods = new Set(cli.rows.map(r=>r.descprod).filter(p=>isProdutoAtivo(p)));
     skusPorCli.push(prods.size);
     const _vt = cli.rows.reduce((s,r)=>s+r.valor,0);
+    // Calcula SKUs ativos comprados anteriormente mas ausentes no último pedido
+    const rowsPos = cli.rows.filter(r=>r.valor>0);
+    const amsU = [...new Set(rowsPos.map(r=>r._anomes).filter(Boolean))].sort((a,b)=>a-b);
+    let skusNaoUltimo = [];
+    if (amsU.length >= 1) {
+      const ultimoAMU = amsU[amsU.length-1];
+      const ultimoProdsU = new Set(rowsPos.filter(r=>r._anomes===ultimoAMU && r.descprod).map(r=>r.descprod));
+      skusNaoUltimo = [...prods].filter(p => !ultimoProdsU.has(p)).sort();
+    }
     const entry = {
       nomecli:cli.nomecli||cli.codcli, codcli:cli.codcli, nomevend:cli.nomevend,
       skus:prods.size, _valorTotal:_vt, valorTotal:fmtBRL(_vt),
-      skusComprados:[...prods].sort()
+      skusComprados:[...prods].sort(), skusNaoUltimo
     };
     lTodos.push(entry);
     if(prods.size < 30) lMenosTrinta.push(entry);
@@ -1515,6 +1530,8 @@ function updateDOM(k, mesRef, repLabel) {
   set('kRedSku', k.comp.redSku); set('kRedSkuSub', 'reduziram SKUs vs 3–6 meses atrás');
   set('kAumCiclo', k.comp.aumCiclo); set('kAumCicloSub', 'comprando com menor frequência');
   set('kRedTicket', k.comp.redTicket); set('kRedTicketSub', 'ticket médio caiu >15%');
+  set('kInativos2', k.inativos.tot);
+  set('kInativos2Sub', k.inativos.l3a6.length + ' (3-6m) · ' + k.inativos.l6a12.length + ' (6-12m) · ' + k.inativos.l12.length + ' (12m+)');
 
   // TOP/BOT PRODUTOS
   buildProdTable('tblTop', k.topProd.top10, false);
@@ -1604,6 +1621,24 @@ function updateDOM(k, mesRef, repLabel) {
   setClick('kMetaPct',   ()=>_showByRep('Meta vs Realizado — '+ml, cliMes(refAM), COLS_FAT, '_valor'));
   setClick('cardMetaCli', ()=>{
     _metaCliData = k.metaCli;
+    const isAdminMC = currentUser && !currentUser.nomevend;
+    if (!isAdminMC && currentUser && currentUser.nomevend) {
+      // Rep: mostra direto seus clientes, sem nível intermediário
+      const allowed = new Set(currentUser.nomevend.map(function(v){return v.toUpperCase();}));
+      const lista = k.metaCli.lCli
+        .filter(function(r){return allowed.has((r.nomevend||'').toUpperCase());})
+        .sort(function(a,b){return b._meta-a._meta;});
+      const COLS_META_CLI_REP = [
+        {key:'nomecli',      label:'Cliente'},
+        {key:'codcli',       label:'Código'},
+        {key:'totalFaturado',label:'Total Faturado', rawKey:'_totalFat'},
+        {key:'meta',         label:'Meta',           rawKey:'_meta'},
+        {key:'realizado',    label:'Realizado Mês',  rawKey:'_real'},
+        {key:'pct',          label:'% Atingido',     rawKey:'_pct'}
+      ];
+      showModal('Meta por Cliente', lista, COLS_META_CLI_REP);
+      return;
+    }
     const COLS_META_REP = [
       {key:'nomevend',  label:'Representante'},
       {key:'meta',      label:'Meta',         rawKey:'_meta'},
@@ -1628,6 +1663,7 @@ function updateDOM(k, mesRef, repLabel) {
   setClick('kRedSku',    ()=>showModal('Clientes que Diminuíram SKU', k.comp.lRedSku, COLS_RSKU));
   setClick('kAumCiclo',  ()=>showModal('Clientes que Aumentaram Ciclo', k.comp.lAumCiclo, COLS_CICV));
   setClick('kRedTicket', ()=>showModal('Clientes que Diminuíram Ticket', k.comp.lRedTicket, COLS_TICK));
+  setClick('kInativos2', ()=>_showByRep('Todos Inativos 90+ dias', [...k.inativos.l3a6,...k.inativos.l6a12,...k.inativos.l12].sort((a,b)=>b._valorUltimoPedido-a._valorUltimoPedido), COLS_INAT, '_valorUltimoPedido'));
   setClick('kTicket',    ()=>showModal('Ticket Médio por Cliente', k.ticket.lista,
     [...COLS_CLI,{key:'ticket',label:'Ticket Médio'},{key:'mesesAtivos',label:'Meses Ativos'},{key:'totalComprado',label:'Total Comprado'}]));
 }
@@ -1932,6 +1968,7 @@ const COLS_QUEL  = [...COLS_CLI,{key:'tipo',label:'Frequência'},{key:'ciclo',la
 const COLS_CICLO = [...COLS_CLI,{key:'ciclo',label:'Ciclo Médio'},{key:'totalMeses',label:'Meses c/ Compra'},{key:'ultimaCompra',label:'Última Compra'},{key:'valorTotal',label:'Total Comprado'}];
 const COLS_SKU   = [
   {label:'SKUs Faltantes',render:(r,ri)=>`<button class="btn-sku-falt" onclick="showSkusFaltantes(_modalRows[${ri}])">🔍 ${produtosAtivos.size-r.skus} faltantes</button>`},
+  {label:'Ausentes no Último',render:(r,ri)=>`<button class="btn-sku-falt" style="background:rgba(234,179,8,.18);border-color:rgba(234,179,8,.4);color:#fde047" onclick="showSkusNaoUltimo(_modalRows[${ri}])">📋 ${(r.skusNaoUltimo||[]).length} ausentes</button>`},
   ...COLS_CLI,{key:'skus',label:'SKUs Comprados'},{key:'valorTotal',label:'Total Comprado'}
 ];
 const COLS_RSKU  = [
@@ -2643,11 +2680,70 @@ function _repClick(elId, idx) {
     showModal('Mix < 30 SKUs — '+_repMixMenor30[idx].nomevend, _repMixMenor30[idx].lista, COLS_MIX_R);
 }
 
+function _buildFatCliTable(k) {
+  const el = document.getElementById('tblFatCliMensal');
+  if (!el || !k._base || !k._base.length) return;
+  const refAM = k._base.reduce(function(m,r){return r._anomes>m?r._anomes:m;},0);
+  const meses6 = [];
+  for (var i=5;i>=0;i--) {
+    var y=Math.floor(refAM/100), mo=refAM%100; mo-=i;
+    while(mo<=0){mo+=12;y--;} while(mo>12){mo-=12;y++;}
+    meses6.push(y*100+mo);
+  }
+  const cliMap2 = new Map();
+  k._base.forEach(function(r){
+    if (!r.codcli) return;
+    if (!cliMap2.has(r.codcli)) cliMap2.set(r.codcli,{codcli:r.codcli,nomecli:r.nomecli||r.codcli,rows:[]});
+    cliMap2.get(r.codcli).rows.push(r);
+  });
+  const cliData = [...cliMap2.values()].map(function(c){
+    const vals = meses6.map(function(am){
+      return c.rows.filter(function(r){return r._anomes===am;}).reduce(function(s,r){return s+r.valor;},0);
+    });
+    const avg1=(vals[0]+vals[1]+vals[2])/3, avg2=(vals[3]+vals[4]+vals[5])/3;
+    var tend,tendCls;
+    if(avg1===0&&avg2===0){tend='—';tendCls='color:#888';}
+    else if(avg2>avg1*1.05){tend='↑ Subindo';tendCls='color:#2ecc71;font-weight:700';}
+    else if(avg2<avg1*0.95){tend='↓ Caindo';tendCls='color:#e74c3c;font-weight:700';}
+    else{tend='→ Estável';tendCls='color:#f39c12;font-weight:700';}
+    return {codcli:c.codcli,nomecli:c.nomecli,vals:vals,tend:tend,tendCls:tendCls,total:vals.reduce(function(s,v){return s+v;},0)};
+  }).sort(function(a,b){return b.total-a.total;});
+
+  const thS='padding:7px 10px;text-align:right;font-size:11px;color:#aaa;border-bottom:1px solid #333;white-space:nowrap';
+  const thL='padding:7px 10px;text-align:left;font-size:11px;color:#aaa;border-bottom:1px solid #333';
+  const tdS='padding:6px 10px;text-align:right;border-bottom:1px solid #1a1a2e';
+  const tdL='padding:6px 10px;text-align:left;border-bottom:1px solid #1a1a2e;cursor:pointer;color:#a78bfa';
+  var html='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
+    +'<th style="'+thL+'">Cliente</th>'
+    +meses6.map(function(am){return '<th style="'+thS+'">'+anoMesToLabel(am)+'</th>';}).join('')
+    +'<th style="'+thS+'">Tendência</th></tr></thead><tbody>';
+  cliData.forEach(function(cd,ci){
+    html+='<tr><td style="'+tdL+'" onclick="_fatCliClick('+ci+')" title="Ver histórico">'+cd.nomecli+'</td>'
+      +cd.vals.map(function(v){var c=v>0?'color:#e2e8f0':'color:#555';return '<td style="'+tdS+';'+c+'">'+( v>0?fmtBRL(v):'—')+'</td>';}).join('')
+      +'<td style="'+tdS+';'+cd.tendCls+'">'+cd.tend+'</td></tr>';
+  });
+  html+='</tbody></table>';
+  el.innerHTML=html;
+  el._cliData=cliData;
+}
+
+function _fatCliClick(idx) {
+  var el=document.getElementById('tblFatCliMensal');
+  if(!el||!el._cliData) return;
+  showClienteHistorico(el._cliData[idx].codcli);
+}
+
 function updateDiretorPanel(k) {
   const isAdmin = currentUser && !currentUser.nomevend;
   document.getElementById('secDiretor').style.display      = isAdmin ? 'block' : 'none';
   document.getElementById('secDiretorTitle').style.display = isAdmin ? 'block' : 'none';
-  if (!isAdmin) return;
+  // Seção fat por cliente (visível apenas para representantes)
+  const secFatCli = document.getElementById('secFatCliView');
+  if (secFatCli) secFatCli.style.display = (!isAdmin && currentUser && currentUser.nomevend) ? 'block' : 'none';
+  if (!isAdmin) {
+    _buildFatCliTable(k);
+    return;
+  }
 
   _repInativos   = k.inativosPorRep   || [];
   _repAumCiclo   = k.aumCicloPorRep   || [];
