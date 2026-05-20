@@ -1075,8 +1075,17 @@ function calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps) {
     if (allowedReps && !allowedReps.has((nomevend||'').toUpperCase())) return;
     const real    = cli ? cli.rows.filter(r=>r._anomes===refAM).reduce((s,r)=>s+r.valor,0) : 0;
     const totalFat= cli ? cli.rows.reduce((s,r)=>s+r.valor,0) : 0;
-    const mesesCli= cli ? [...new Set(cli.rows.map(r=>r._anomes).filter(Boolean))].length : 0;
-    const _ticketMed = (mesesCli > 0) ? totalFat / mesesCli : 0;
+    // Ticket médio: média dos 3 últimos pedidos (anomes) com valor > 0
+    let _ticketMed = 0;
+    if (cli) {
+      const rowsPos = cli.rows.filter(r=>r.valor>0);
+      const amsDesc = [...new Set(rowsPos.map(r=>r._anomes).filter(Boolean))].sort((a,b)=>b-a);
+      const ult3 = amsDesc.slice(0,3);
+      if (ult3.length>0) {
+        const soma3 = ult3.reduce((s,am)=>s+rowsPos.filter(r=>r._anomes===am).reduce((ss,r)=>ss+r.valor,0),0);
+        _ticketMed = soma3 / ult3.length;
+      }
+    }
     const pct     = metaVal > 0 ? +(real/metaVal*100).toFixed(1) : 0;
     lCli.push({ nomecli, codcli, nomevend, _meta:metaVal, meta:fmtBRL(metaVal), _real:real, realizado:fmtBRL(real), _ticketMed, ticketMedio:fmtBRL(_ticketMed), pct:pct+'%', _pct:pct });
     if (!repMap.has(nomevend)) repMap.set(nomevend, {nomevend, _meta:0, _real:0});
