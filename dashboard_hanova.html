@@ -900,7 +900,9 @@ function applyFilters() {
   // Filter data by rep
   const base = repVal === 'TODOS' ? dadosBase : dadosBase.filter(r => r.nomevend === repVal);
 
-  const kpis = computeKPIs(base, mesRef, meta);
+  // Quando um rep específico está selecionado, filtrar meta também por ele
+  const repAllowed = (repVal && repVal !== 'TODOS') ? new Set([repVal.toUpperCase()]) : null;
+  const kpis = computeKPIs(base, mesRef, meta, repAllowed);
   currentKpis = kpis;
   updateDOM(kpis, mesRef, repVal);
   updateCharts(kpis, mesRef);
@@ -2778,17 +2780,20 @@ function updateDiretorPanel(k) {
   document.getElementById('secDiretor').style.display      = isAdmin ? 'block' : 'none';
   document.getElementById('secDiretorTitle').style.display = isAdmin ? 'block' : 'none';
 
-  // Seção de faturamento últimos 6 meses (admin = por rep; rep = por cliente)
+  // Seção de faturamento últimos 6 meses
+  // Admin vendo TODOS → tabela por rep | Admin vendo rep específico OU rep logado → tabela por cliente
   const secFat = document.getElementById('secFatView');
   if (secFat) {
     if (isAdmin || isRep) {
+      const repFiltroVal = document.getElementById('filtroRep') ? document.getElementById('filtroRep').value : 'TODOS';
+      const showByRep = isAdmin && (!repFiltroVal || repFiltroVal === 'TODOS');
       secFat.style.display = 'block';
       const title = document.getElementById('secFatViewTitle');
-      if (title) title.textContent = isAdmin
+      if (title) title.textContent = showByRep
         ? '📊 Faturamento por Representante — Últimos 6 Meses'
         : '📊 Faturamento por Cliente — Últimos 6 Meses';
-      if (isAdmin) _buildFatRepTable(k);
-      else         _buildFatCliTable(k);
+      if (showByRep) _buildFatRepTable(k);
+      else           _buildFatCliTable(k);
     } else {
       secFat.style.display = 'none';
     }
