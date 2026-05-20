@@ -481,16 +481,12 @@ tr:hover td{background:rgba(255,255,255,.03)}
         <div class="ct" style="margin-bottom:10px;font-size:14px;font-weight:700;color:var(--gold-lt)">🎯 Meta vs Realizado por Representante</div>
         <div id="tblMetaRep"></div>
       </div>
-      <div style="margin-top:16px">
-        <div class="ct" style="margin-bottom:10px;font-size:14px;font-weight:700;color:var(--gold-lt)">📊 Faturamento por Rep — Últimos 6 Meses</div>
-        <div class="card" style="padding:14px;overflow-x:auto"><div id="tblFatRepMensal"></div></div>
-      </div>
     </div>
 
-    <!-- FAT CLIENTE VIEW (visível p/ representantes) -->
-    <div id="secFatCliView" style="display:none;margin-top:16px">
-      <div class="ct" style="margin-bottom:10px;font-size:14px;font-weight:700;color:var(--gold-lt)">📊 Faturamento por Cliente — Últimos 6 Meses</div>
-      <div class="card" style="padding:14px;overflow-x:auto"><div id="tblFatCliMensal"></div></div>
+    <!-- FAT TABLE: Faturamento Últimos 6 Meses (admin = por rep; rep = por cliente) -->
+    <div id="secFatView" style="display:none;margin-top:8px">
+      <div class="sec-title" id="secFatViewTitle">📊 Faturamento — Últimos 6 Meses</div>
+      <div class="card" style="padding:14px;overflow-x:auto"><div id="tblFatMensal"></div></div>
     </div>
 
     <!-- GRÁFICOS PRINCIPAIS -->
@@ -983,7 +979,7 @@ function calcRepFoco(clienteMap, lMenosTrinta, refDate) {
     .slice(0,6);
 }
 
-function computeKPIs(base, mesRef, meta) {
+function computeKPIs(base, mesRef, meta, allowedReps) {
   const refAM  = mesRef.ano*100 + mesRef.mes;
   const antAM  = prevAnoMes(refAM, 1);
   const anoAntAM = (mesRef.ano-1)*100 + mesRef.mes;
@@ -1040,7 +1036,7 @@ function computeKPIs(base, mesRef, meta) {
   const repReal = calcRepReal(base, refAM);
 
   _clienteMapGlobal = clienteMap;
-  const metaCli  = calcMetaPorCliente(base, metaMap, refAM, clienteMap);
+  const metaCli  = calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps);
   const exQuentes = calcExQuentes(clienteMap, mesRef);
 
   return {
@@ -1057,7 +1053,7 @@ function computeKPIs(base, mesRef, meta) {
   };
 }
 
-function calcMetaPorCliente(base, metaMap, refAM, clienteMap) {
+function calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps) {
   if (!metaMap.size) return { totalMeta:0, totalReal:0, pct:0, lCli:[], lRep:[] };
   const lCli = [], repMap = new Map();
   metaMap.forEach((metaVal, codcli) => {
@@ -1065,6 +1061,8 @@ function calcMetaPorCliente(base, metaMap, refAM, clienteMap) {
     const cad = !cli ? (cadastroMap.get(codcli)||null) : null;
     const nomecli  = cli ? (cli.nomecli||codcli) : (cad ? (cad.nomecli||codcli) : codcli);
     const nomevend = cli ? (cli.nomevend||'N/D') : (cad ? (cad.nomevend||'N/D') : 'N/D');
+    // Filtro por representante: se allowedReps definido, só inclui clientes desse rep
+    if (allowedReps && !allowedReps.has((nomevend||'').toUpperCase())) return;
     const real    = cli ? cli.rows.filter(r=>r._anomes===refAM).reduce((s,r)=>s+r.valor,0) : 0;
     const totalFat= cli ? cli.rows.reduce((s,r)=>s+r.valor,0) : 0;
     const pct     = metaVal > 0 ? +(real/metaVal*100).toFixed(1) : 0;
@@ -2551,7 +2549,7 @@ window.applyFilters = function applyFilters() {
     const meta   = parseFloat(document.getElementById('metaInput').value) || 947000;
     const allowed = new Set(currentUser.nomevend.map(v => v.toUpperCase()));
     const base = dadosBase.filter(r => allowed.has((r.nomevend||'').toUpperCase()));
-    const kpis = computeKPIs(base, mesRef, meta);
+    const kpis = computeKPIs(base, mesRef, meta, allowed);
     currentKpis = kpis;
     updateDOM(kpis, mesRef, currentUser.label);
     updateCharts(kpis, mesRef);
@@ -2641,7 +2639,7 @@ function _metaCliDrill(nvEnc) {
 }
 
 function _fatRepClick(idx) {
-  var el = document.getElementById('tblFatRepMensal');
+  var el = document.getElementById('tblFatMensal');
   if (!el || !el._repData) return;
   var rd = el._repData[idx];
   var base = el._base || dadosBase;
@@ -2680,9 +2678,50 @@ function _repClick(elId, idx) {
     showModal('Mix < 30 SKUs — '+_repMixMenor30[idx].nomevend, _repMixMenor30[idx].lista, COLS_MIX_R);
 }
 
+function _buildFatRepTable(k) {
+  const el = document.getElementById('tblFatMensal');
+  if (!el) return;
+  if (!k._base || !k._base.length) { el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:12px">Sem dados para o período.</p>'; return; }
+  const refAM = k._base.reduce(function(m,r){return r._anomes>m?r._anomes:m;},0);
+  const meses6=[];
+  for(var i=5;i>=0;i--){var y=Math.floor(refAM/100),mo=refAM%100;mo-=i;while(mo<=0){mo+=12;y--;}while(mo>12){mo-=12;y++;}meses6.push(y*100+mo);}
+  const repsSet=new Set(k._base.map(function(r){return r.nomevend;}).filter(Boolean));
+  const reps=[...repsSet].filter(function(r){return r&&r!=='N/D';}).sort();
+  if(!reps.length){el.innerHTML='<p style="color:var(--muted);text-align:center;padding:12px">Nenhum representante encontrado.</p>';return;}
+  const repData=reps.map(function(rep){
+    const vals=meses6.map(function(am){return k._base.filter(function(r){return r.nomevend===rep&&r._anomes===am;}).reduce(function(s,r){return s+r.valor;},0);});
+    const a1=(vals[0]+vals[1]+vals[2])/3,a2=(vals[3]+vals[4]+vals[5])/3;
+    var tend,tendCls;
+    if(a1===0&&a2===0){tend='—';tendCls='color:#888';}
+    else if(a2>a1*1.05){tend='↑ Subindo';tendCls='color:#2ecc71;font-weight:700';}
+    else if(a2<a1*0.95){tend='↓ Caindo';tendCls='color:#e74c3c;font-weight:700';}
+    else{tend='→ Estável';tendCls='color:#f39c12;font-weight:700';}
+    return{rep,vals,tend,tendCls};
+  });
+  repData.sort(function(a,b){return b.vals.reduce(function(s,v){return s+v;},0)-a.vals.reduce(function(s,v){return s+v;},0);});
+  const thS='padding:7px 10px;text-align:right;font-size:11px;color:#aaa;border-bottom:1px solid #333;white-space:nowrap';
+  const thL='padding:7px 10px;text-align:left;font-size:11px;color:#aaa;border-bottom:1px solid #333';
+  const tdS='padding:6px 10px;text-align:right;border-bottom:1px solid #1a1a2e';
+  const tdL='padding:6px 10px;text-align:left;border-bottom:1px solid #1a1a2e;cursor:pointer;color:#a78bfa';
+  var html='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
+    +'<th style="'+thL+'">Representante</th>'
+    +meses6.map(function(am){return '<th style="'+thS+'">'+anoMesToLabel(am)+'</th>';}).join('')
+    +'<th style="'+thS+'">Tendência</th></tr></thead><tbody>';
+  repData.forEach(function(rd,ri){
+    html+='<tr><td style="'+tdL+'" onclick="_fatRepClick('+ri+')" title="Ver clientes">'+rd.rep+'</td>'
+      +rd.vals.map(function(v){var c=v>0?'color:#e2e8f0':'color:#555';return '<td style="'+tdS+';'+c+'">'+( v>0?fmtBRL(v):'—')+'</td>';}).join('')
+      +'<td style="'+tdS+';'+rd.tendCls+'">'+rd.tend+'</td></tr>';
+  });
+  html+='</tbody></table>';
+  el.innerHTML=html;
+  el._repData=repData;
+  el._base=k._base;
+}
+
 function _buildFatCliTable(k) {
-  const el = document.getElementById('tblFatCliMensal');
-  if (!el || !k._base || !k._base.length) return;
+  const el = document.getElementById('tblFatMensal');
+  if (!el) return;
+  if (!k._base || !k._base.length) { el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:12px">Sem dados para o período.</p>'; return; }
   const refAM = k._base.reduce(function(m,r){return r._anomes>m?r._anomes:m;},0);
   const meses6 = [];
   for (var i=5;i>=0;i--) {
@@ -2728,22 +2767,34 @@ function _buildFatCliTable(k) {
 }
 
 function _fatCliClick(idx) {
-  var el=document.getElementById('tblFatCliMensal');
+  var el=document.getElementById('tblFatMensal');
   if(!el||!el._cliData) return;
   showClienteHistorico(el._cliData[idx].codcli);
 }
 
 function updateDiretorPanel(k) {
   const isAdmin = currentUser && !currentUser.nomevend;
+  const isRep   = !isAdmin && currentUser && currentUser.nomevend;
   document.getElementById('secDiretor').style.display      = isAdmin ? 'block' : 'none';
   document.getElementById('secDiretorTitle').style.display = isAdmin ? 'block' : 'none';
-  // Seção fat por cliente (visível apenas para representantes)
-  const secFatCli = document.getElementById('secFatCliView');
-  if (secFatCli) secFatCli.style.display = (!isAdmin && currentUser && currentUser.nomevend) ? 'block' : 'none';
-  if (!isAdmin) {
-    _buildFatCliTable(k);
-    return;
+
+  // Seção de faturamento últimos 6 meses (admin = por rep; rep = por cliente)
+  const secFat = document.getElementById('secFatView');
+  if (secFat) {
+    if (isAdmin || isRep) {
+      secFat.style.display = 'block';
+      const title = document.getElementById('secFatViewTitle');
+      if (title) title.textContent = isAdmin
+        ? '📊 Faturamento por Representante — Últimos 6 Meses'
+        : '📊 Faturamento por Cliente — Últimos 6 Meses';
+      if (isAdmin) _buildFatRepTable(k);
+      else         _buildFatCliTable(k);
+    } else {
+      secFat.style.display = 'none';
+    }
   }
+
+  if (!isAdmin) return;
 
   _repInativos   = k.inativosPorRep   || [];
   _repAumCiclo   = k.aumCicloPorRep   || [];
@@ -2795,67 +2846,6 @@ function updateDiretorPanel(k) {
     }
   })();
 
-  // Tabela: faturamento por rep últimos 6 meses
-  (function(){
-    const el = document.getElementById('tblFatRepMensal');
-    if (!el || !k._base || !k._base.length) return;
-    const refAM = k._base.reduce(function(m,r){return r._anomes>m?r._anomes:m;}, 0);
-    const meses6 = [];
-    for (var i=5;i>=0;i--) {
-      var y=Math.floor(refAM/100), mo=refAM%100; mo-=i;
-      while(mo<=0){mo+=12;y--;} while(mo>12){mo-=12;y++;}
-      meses6.push(y*100+mo);
-    }
-    const repsSet = new Set(k._base.map(function(r){return r.nomevend;}).filter(Boolean));
-    const reps = [...repsSet].filter(function(r){return r&&r!=='N/D';}).sort();
-
-    // calcula fat por rep por mes
-    const repData = reps.map(function(rep) {
-      const vals = meses6.map(function(am){
-        return k._base.filter(function(r){return r.nomevend===rep&&r._anomes===am;}).reduce(function(s,r){return s+r.valor;},0);
-      });
-      // tendência: média últimos 3 vs primeiros 3
-      const avg1 = (vals[0]+vals[1]+vals[2])/3;
-      const avg2 = (vals[3]+vals[4]+vals[5])/3;
-      var tend, tendCls;
-      if (avg1 === 0 && avg2 === 0) { tend='—'; tendCls='color:#888'; }
-      else if (avg2 > avg1*1.05) { tend='↑ Subindo'; tendCls='color:#2ecc71;font-weight:700'; }
-      else if (avg2 < avg1*0.95) { tend='↓ Caindo'; tendCls='color:#e74c3c;font-weight:700'; }
-      else { tend='→ Estável'; tendCls='color:#f39c12;font-weight:700'; }
-      return {rep, vals, tend, tendCls};
-    });
-
-    // sort por total decrescente
-    repData.sort(function(a,b){
-      return b.vals.reduce(function(s,v){return s+v;},0) - a.vals.reduce(function(s,v){return s+v;},0);
-    });
-
-    const thStyle = 'padding:7px 10px;text-align:right;font-size:11px;color:#aaa;border-bottom:1px solid #333;white-space:nowrap';
-    const thStyleL = 'padding:7px 10px;text-align:left;font-size:11px;color:#aaa;border-bottom:1px solid #333';
-    const head = '<table style="width:100%;border-collapse:collapse;font-size:12px">'
-      + '<thead><tr>'
-      + '<th style="'+thStyleL+'">Representante</th>'
-      + meses6.map(function(am){return '<th style="'+thStyle+'">'+anoMesToLabel(am)+'</th>';}).join('')
-      + '<th style="'+thStyle+'">Tendência</th>'
-      + '</tr></thead><tbody>';
-
-    const tdStyle = 'padding:6px 10px;text-align:right;border-bottom:1px solid #1a1a2e';
-    const tdStyleL = 'padding:6px 10px;text-align:left;border-bottom:1px solid #1a1a2e;cursor:pointer;color:#a78bfa';
-    const rows = repData.map(function(rd, ri) {
-      return '<tr>'
-        + '<td style="'+tdStyleL+'" onclick="_fatRepClick('+ri+')" title="Ver clientes">'+rd.rep+'</td>'
-        + rd.vals.map(function(v){
-            var c = v>0?'color:#e2e8f0':'color:#555';
-            return '<td style="'+tdStyle+';'+c+'">'+( v>0?fmtBRL(v):'—')+'</td>';
-          }).join('')
-        + '<td style="'+tdStyle+';'+rd.tendCls+'">'+rd.tend+'</td>'
-        + '</tr>';
-    });
-
-    el.innerHTML = head + rows.join('') + '</tbody></table>';
-    el._repData = repData;
-    el._base    = k._base;
-  })();
 
   // 6 Reps Foco
   const focoEl = document.getElementById('secRepFoco');
