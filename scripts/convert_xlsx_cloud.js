@@ -75,7 +75,12 @@ console.log('Filtered rows:', dadosCompact.length);
 
 // ---- CADASTRO CLIENTE ----
 console.log('Reading cadastro...');
-const wbCad = XLSX.readFile('/tmp/hanova/dados_relatorios/cadastro-cliente-dimensão.xlsx', { cellDates: true, raw: true });
+// Tentar ambos os nomes (com e sem acento)
+let wbCad;
+const cadFiles = fs.readdirSync('/tmp/hanova/dados_relatorios/')
+  .filter(f => f.toLowerCase().startsWith('cadastro-cliente') && (f.endsWith('.xlsx') || f.endsWith('.xls')));
+console.log('Cad files found:', cadFiles);
+wbCad = XLSX.readFile('/tmp/hanova/dados_relatorios/' + (cadFiles[0] || 'cadastro-cliente-dimensao.xlsx'), { cellDates: true, raw: true });
 const wsCad = wbCad.Sheets[wbCad.SheetNames[0]];
 const rawCad = XLSX.utils.sheet_to_json(wsCad, { defval: null, raw: true });
 console.log('Rows:', rawCad.length);
@@ -105,59 +110,101 @@ console.log('Using prod col:', cProd);
 const prodCompact = rawProd.map(r => String(r[cProd] || '')).filter(Boolean);
 
 // ---- METAS POR CLIENTE ----
-// Lê todas as planilhas de meta da pasta mais recente em G:/Meu Drive/comercial hanova/metas/
-// Estrutura de cada arquivo: linha 0 = mapeamento de colunas, linhas 1+ = dados
-// Coluna VALIDAR META (penúltima) = valor da meta por cliente
-const metasCompact = [];  // [codcli, metaValor, nomevend, mes_ref]
-try {
-  const META_BASE = '/tmp/hanova/metas/';
-  const subfolders = fs.readdirSync(META_BASE)
-    .filter(f => /^\d{2}-\d{4}$/.test(f))
-    .sort()
-    .reverse(); // mais recente primeiro
+// Lê todos os arquivos .xlsx recursivamente em /tmp/hanova/metas/
+// Suporta tanto a estrutura antiga (subpastas MM-YYYY com colMap na linha 0)
+// quanto planilhas normais com header direto
+const metasCompact = [];  // [codcli, metaValor]
 
-  if (subfolders.length > 0) {
-    const mesRef = subfolders[0]; // ex: "05-2026"
-    const metaDir = path.join(META_BASE, mesRef);
-    const metaFiles = fs.readdirSync(metaDir)
-      .filter(f => f.endsWith('.xlsx') && !f.startsWith('~') && !f.startsWith('META_05_2026'));
-
-    console.log(`Reading metas from ${mesRef} (${metaFiles.length} files)...`);
-    let totalMeta = 0;
-
-    for (const file of metaFiles) {
-      try {
-        const wbM = XLSX.readFile(path.join(metaDir, file), { raw: true });
-        const wsM = wbM.Sheets[wbM.SheetNames[0]];
-        const rowsM = XLSX.utils.sheet_to_json(wsM, { defval: null, raw: true });
-        if (rowsM.length < 2) continue;
-
-        // Row 0 = col name map (values are the real column names)
-        const colMap = rowsM[0];
-        const keys = Object.keys(colMap);
-        const kCodcli   = keys.find(k => colMap[k] === 'CODCLI');
-        const kValidar  = keys.find(k => colMap[k] === 'VALIDAR META');
-        const kNomevend = keys.find(k => colMap[k] === 'NOMEVEND');
-        const kMesRef   = mesRef; // "MM-YYYY"
-
-        if (!kCodcli || !kValidar) continue;
-
-        for (const r of rowsM.slice(1)) {
-          const codcli = r[kCodcli];
-          const metaVal = r[kValidar];
-          if (!codcli || typeof metaVal !== 'number' || metaVal <= 0) continue;
-          const nomevend = String(r[kNomevend] || '');
-          metasCompact.push([String(codcli), metaVal, nomevend, kMesRef]);
-          totalMeta++;
-        }
-      } catch(e) {
-        console.warn('  Skip', file, e.message);
+function readAllXlsxFiles(dir) {
+  const result = [];
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        result.push(...readAllXlsxFiles(full));
+      } else if ((e.name.endsWith('.xlsx') || e.name.endsWith('.xls')) &&
+                 !e.name.startsWith('~') && !e.name.startsWith('.')) {
+        result.push(full);
       }
     }
-    console.log(`Metas loaded: ${totalMeta} clientes com meta em ${mesRef}`);
-  } else {
-    console.log('No meta folders found, skipping.');
+  } catch(e) { /* ignore */ }
+  return result;
+}
+
+function tryParseMeta(filePath) {
+  const wb = XLSX.readFile(filePath, { raw: true });
+  const results = [];
+
+  for (const sheetName of wb.SheetNames) {
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: null, raw: true });
+    if (rows.length < 2) continue;
+
+    const firstRowKeys = Object.keys(rows[0]);
+
+    // Método 1: cabeçalho direto — procura colunas por nome nas chaves do objeto
+    let kCodcli = normCol(firstRowKeys, ['codcli','cod_cli','codparc','codigo','cod.cli','cod cli']);
+    let kMeta   = normCol(firstRowKeys, ['validar meta','meta','vlr meta','valor meta','meta_valor','metavalor','vl_meta']);
+    let kNomevend = normCol(firstRowKeys, ['nomevend','nome_vend','vendedor','representante','rep']);
+
+    if (kCodcli && kMeta) {
+      console.log('  Meta (direto):', path.basename(filePath), 'sheet:', sheetName, '->', kCodcli, kMeta);
+      for (const r of rows) {
+        const codcli = String(r[kCodcli] || '').trim();
+        const metaVal = typeof r[kMeta] === 'number' ? r[kMeta] : parseValor(r[kMeta]);
+        if (codcli && metaVal > 0) {
+          results.push([codcli, metaVal]);
+        }
+      }
+      break; // Achou nesta aba, não precisa tentar as outras
+    }
+
+    // Método 2: linha 0 contém mapeamento de colunas (formato especial)
+    // Os valores da linha 0 são os nomes reais das colunas
+    const colMap = rows[0];
+    const colMapVals = Object.values(colMap).map(v => String(v || '').trim().toUpperCase());
+    const hasCodcli = colMapVals.some(v => v.includes('CODCLI') || v.includes('COD_CLI') || v.includes('CODPARC'));
+    const hasMeta   = colMapVals.some(v => v.includes('META') || v.includes('VALIDAR'));
+
+    if (hasCodcli && hasMeta) {
+      const mapKeys = Object.keys(colMap);
+      kCodcli   = mapKeys.find(k => {const v=String(colMap[k]||'').toUpperCase(); return v.includes('CODCLI')||v.includes('COD_CLI')||v.includes('CODPARC');});
+      kMeta     = mapKeys.find(k => {const v=String(colMap[k]||'').toUpperCase(); return v.includes('VALIDAR META')||v==='META';});
+      if (!kMeta) kMeta = mapKeys.find(k => {const v=String(colMap[k]||'').toUpperCase(); return v.includes('META');});
+      kNomevend = mapKeys.find(k => {const v=String(colMap[k]||'').toUpperCase(); return v.includes('NOMEVEND')||v.includes('VENDEDOR')||v.includes('REPRESENTANTE');});
+
+      if (kCodcli && kMeta) {
+        console.log('  Meta (colmap):', path.basename(filePath), 'sheet:', sheetName, '->', kCodcli, kMeta);
+        for (const r of rows.slice(1)) {
+          const codcli = String(r[kCodcli] || '').trim();
+          const metaVal = typeof r[kMeta] === 'number' ? r[kMeta] : parseValor(r[kMeta]);
+          if (codcli && metaVal > 0) {
+            results.push([codcli, metaVal]);
+          }
+        }
+        break;
+      }
+    }
   }
+  return results;
+}
+
+try {
+  const META_BASE = '/tmp/hanova/metas/';
+  const metaFiles = readAllXlsxFiles(META_BASE);
+  console.log('Meta files found:', metaFiles.length, metaFiles.map(f => path.relative(META_BASE, f)));
+
+  for (const filePath of metaFiles) {
+    try {
+      const rows = tryParseMeta(filePath);
+      metasCompact.push(...rows);
+      if (rows.length > 0) console.log('  Loaded', rows.length, 'metas from', path.basename(filePath));
+    } catch(e) {
+      console.warn('  Skip', path.basename(filePath), e.message);
+    }
+  }
+  console.log('Total metas:', metasCompact.length);
 } catch(e) {
   console.warn('Meta read error:', e.message);
 }
@@ -171,12 +218,10 @@ try {
     f.toLowerCase().includes('bonificad') && (f.endsWith('.xlsx') || f.endsWith('.xls')) && !f.startsWith('~'));
 
   if (bonifFiles.length > 0) {
-    // Usar o mais recente pelo nome (ordenação alfabética funciona p/ o padrão "08-24 A 07-25")
     const bonifFile = bonifFiles.sort().reverse()[0];
     console.log('Reading bonificacoes:', bonifFile);
     const wbBonif = XLSX.readFile(path.join(dadosDir, bonifFile), { cellDates: true, raw: true });
 
-    // Tentar aba "new sheet", senão usar a primeira
     const sheetName = wbBonif.SheetNames.find(s =>
       s.toLowerCase().includes('new') || s.toLowerCase().includes('sheet')) || wbBonif.SheetNames[0];
     console.log('Using sheet:', sheetName);
@@ -193,7 +238,6 @@ try {
     const bData   = normCol(hBonif, ['emissao', 'emissão', 'emiss', 'data', 'dtped']);
     console.log('Bonif cols found:', { bCodcli, bValor, bData });
 
-    // Bonificações: sem filtro de data mínima — incluir todo o histórico do arquivo
     const DATA_BONIF_MIN = new Date('2024-01-01');
     let totalBonif = 0;
     for (const r of rawBonif) {
@@ -205,7 +249,7 @@ try {
       bonifCompact.push([String(r[bCodcli] || ''), valor, anomes]);
       totalBonif++;
     }
-    console.log(`Bonificacoes loaded: ${totalBonif} registros`);
+    console.log('Bonificacoes loaded:', totalBonif, 'registros');
   } else {
     console.log('No bonificacao file found, skipping.');
   }
@@ -218,12 +262,12 @@ const output = {
   dados: dadosCompact,
   cadastro: cadCompact,
   produtos: prodCompact,
-  metas: metasCompact,        // [codcli, metaValor, nomevend, mesRef]
+  metas: metasCompact,        // [codcli, metaValor]
   bonificacoes: bonifCompact, // [codcli, valor, anomes]
   meta: {
     colsDados: ['codcli','valor','anomes','descprod'],
     colsCadastro: ['codcli','nomecli','nomevend'],
-    colsMetas: ['codcli','metaValor','nomevend','mesRef'],
+    colsMetas: ['codcli','metaValor'],
     colsBonif: ['codcli','valor','anomes'],
     geradoEm: new Date().toISOString()
   }
@@ -233,7 +277,6 @@ const json = JSON.stringify(output);
 fs.writeFileSync('/tmp/hanova/hanova_data.json', json);
 console.log('JSON size:', (json.length / 1024 / 1024).toFixed(2), 'MB');
 
-// Gzip + base64 para o dashboard
 const zlib = require('zlib');
 const compressed = zlib.gzipSync(Buffer.from(json, 'utf8'));
 const b64 = compressed.toString('base64');
