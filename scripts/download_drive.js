@@ -8,35 +8,31 @@ const ENTRADA = TMP + '/entrada';
 
 [TMP, DADOS, METAS, ENTRADA].forEach(d => fs.mkdirSync(d, { recursive: true }));
 
-function rclone(args) {
-  console.log('rclone', args);
-  execSync('rclone ' + args, { stdio: 'inherit' });
+function rclone(cmd) {
+  console.log('rclone', cmd);
+  execSync('rclone ' + cmd, { stdio: 'inherit' });
 }
 
-function rcloneSafe(args) {
-  try {
-    rclone(args);
-  } catch(e) {
-    console.warn('Aviso (nao fatal):', e.message.split('\n')[0]);
-  }
+function rcloneSafe(cmd) {
+  try { rclone(cmd); } catch(e) { console.warn('Aviso (nao fatal):', e.message.split('\n')[0]); }
 }
 
 // Arquivos de dados principais
 rclone('copy "gdrive:dados relatorios/dados_processados_powerbi_novo.xlsx" "' + DADOS + '/"');
-rclone('copy "gdrive:dados relatorios/cadastro-cliente-dimensao.xlsx" "' + DADOS + '/"');
-rcloneSafe('copy "gdrive:dados relatorios/cadastro-cliente-dimensão.xlsx" "' + DADOS + '/"');
 rclone('copy "gdrive:dados relatorios/Produtos Hanova.xlsx" "' + DADOS + '/"');
 
-// Bonificacoes (qualquer arquivo com "bonificad" no nome)
+// Cadastro cliente — usa --include para lidar com caracteres especiais no nome
+rclone('copy "gdrive:dados relatorios/" "' + DADOS + '/" --include "cadastro-cliente*"');
+
+// Bonificacoes
 rclone('copy "gdrive:dados relatorios/" "' + DADOS + '/" --include "*onificad*"');
 
-// Pasta de entrada (novos relatorios a processar)
+// Pasta de entrada
 rcloneSafe('copy "gdrive:dados relatorios/entrada/" "' + ENTRADA + '/"');
 
-// Metas — pasta pode ter nome com maiusculas variadas, tentar ambos
+// Metas — tentar variações de maiusculas/minusculas
 rcloneSafe('copy "gdrive:Comercial hanova/Metas/" "' + METAS + '/" --max-depth 2');
 rcloneSafe('copy "gdrive:comercial hanova/metas/" "' + METAS + '/" --max-depth 2');
-rcloneSafe('copy "gdrive:comercial hanova/Metas/" "' + METAS + '/" --max-depth 2');
 
 // Listar arquivos baixados
 console.log('\n=== Arquivos baixados ===');
