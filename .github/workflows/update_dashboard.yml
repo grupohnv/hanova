@@ -23,9 +23,11 @@ jobs:
         run: curl https://rclone.org/install.sh | sudo bash
 
       - name: Configure rclone
+        env:
+          RCLONE_CFG: ${{ secrets.RCLONE_CONFIG }}
         run: |
           mkdir -p ~/.config/rclone
-          printf '%s' "${{ secrets.RCLONE_CONFIG }}" > ~/.config/rclone/rclone.conf
+          printf '%s' "$RCLONE_CFG" > ~/.config/rclone/rclone.conf
 
       - name: Install Node deps
         run: npm install xlsx
@@ -50,5 +52,5 @@ jobs:
           git config user.name "hanova-bot"
           git config user.email "bot@hanova.com"
           git add dashboard_hanova.html
-          git diff --staged --quiet && echo "Sem mudancas" || git commit -m "Auto update"
+          git diff --staged --quiet && echo "Sem mudancas" || git commit -m "Auto update $(date -u +'%d/%m/%Y %H:%M') UTC"
           git push
