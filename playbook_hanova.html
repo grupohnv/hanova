@@ -1,0 +1,2531 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Playbook Hanova — Dashboard Comercial</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d2e;
+    --card2: #22263a;
+    --yellow: #f59e0b;
+    --green: #10b981;
+    --red: #ef4444;
+    --orange: #f97316;
+    --blue: #3b82f6;
+    --purple: #8b5cf6;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --border: #2d3248;
+  }
+
+  html, body {
+    height: 100%;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  /* PROGRESS BAR */
+  #progress-bar {
+    position: fixed;
+    top: 0; left: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--yellow), var(--orange));
+    transition: width 0.4s ease;
+    z-index: 100;
+    border-radius: 0 2px 2px 0;
+  }
+
+  /* SLIDES CONTAINER */
+  #slides-wrapper {
+    width: 100%;
+    height: 100vh;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .slide {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 20px 40px 80px;
+    opacity: 0;
+    transform: translateX(40px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    pointer-events: none;
+    overflow-y: auto;
+  }
+
+  .slide.active {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: all;
+  }
+
+  .slide.exit-left {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+
+  /* NAVIGATION */
+  #nav-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 60px;
+    background: rgba(15,17,23,0.95);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+  }
+
+  .nav-btn {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .nav-btn:hover:not(:disabled) {
+    background: var(--yellow);
+    color: #000;
+    border-color: var(--yellow);
+    transform: scale(1.05);
+  }
+
+  .nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  #slide-counter {
+    font-size: 14px;
+    color: var(--muted);
+    min-width: 60px;
+    text-align: center;
+    letter-spacing: 0.5px;
+  }
+
+  /* SLIDE DOTS */
+  #slide-dots {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+  }
+
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--border);
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+
+  .dot.active {
+    background: var(--yellow);
+    width: 18px;
+    border-radius: 4px;
+  }
+
+  /* TYPOGRAPHY */
+  .slide-title {
+    font-size: clamp(20px, 3.2vw, 34px);
+    font-weight: 800;
+    margin-bottom: 6px;
+    text-align: center;
+  }
+
+  .slide-subtitle {
+    font-size: clamp(12px, 1.8vw, 15px);
+    color: var(--muted);
+    text-align: center;
+    margin-bottom: 24px;
+    max-width: 600px;
+  }
+
+  /* CARDS */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    transition: all 0.25s;
+  }
+
+  .card:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  /* ========== SLIDE 1 — CAPA ========== */
+  #slide-1 {
+    background: radial-gradient(ellipse at 50% 30%, #1e1640 0%, var(--bg) 65%);
+  }
+
+  .cover-dots {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, #ffffff10 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+  }
+
+  .logo-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 22px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .logo-h {
+    width: 64px; height: 64px;
+    background: linear-gradient(135deg, #4c1d95, #6d28d9);
+    border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px;
+    font-weight: 900;
+    color: var(--yellow);
+    box-shadow: 0 0 30px rgba(245,158,11,0.3);
+  }
+
+  .logo-text {
+    font-size: 42px;
+    font-weight: 900;
+    color: var(--yellow);
+    letter-spacing: 3px;
+  }
+
+  .cover-title {
+    font-size: clamp(26px, 4.5vw, 48px);
+    font-weight: 800;
+    text-align: center;
+    margin-bottom: 10px;
+    background: linear-gradient(135deg, #fff, #e2e8f0);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cover-subtitle {
+    font-size: clamp(13px, 2vw, 17px);
+    color: var(--muted);
+    text-align: center;
+    margin-bottom: 22px;
+    max-width: 500px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .badge {
+    background: rgba(245,158,11,0.15);
+    border: 1px solid rgba(245,158,11,0.4);
+    color: var(--yellow);
+    padding: 8px 18px;
+    border-radius: 100px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 28px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--yellow), var(--orange));
+    color: #000;
+    border: none;
+    padding: 14px 36px;
+    border-radius: 14px;
+    font-size: 17px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.25s;
+    box-shadow: 0 4px 20px rgba(245,158,11,0.4);
+    position: relative;
+    z-index: 1;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 8px 32px rgba(245,158,11,0.5);
+  }
+
+  /* Mini cards flutuantes na capa */
+  .floating-cards-wrapper {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .float-card {
+    position: absolute;
+    background: rgba(26,29,46,0.85);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 18px;
+    backdrop-filter: blur(6px);
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    white-space: nowrap;
+  }
+
+  .float-card-1 {
+    top: 18%;
+    left: 5%;
+    border-color: rgba(249,115,22,0.4);
+    color: #fdba74;
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .float-card-2 {
+    top: 28%;
+    right: 4%;
+    border-color: rgba(16,185,129,0.4);
+    color: #6ee7b7;
+    animation: float 3s ease-in-out 1s infinite;
+  }
+
+  .float-card-3 {
+    bottom: 22%;
+    left: 7%;
+    border-color: rgba(139,92,246,0.4);
+    color: #c4b5fd;
+    animation: float 3s ease-in-out 2s infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+  }
+
+  /* ========== SLIDE 2 — ACESSO ========== */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    width: 100%;
+    max-width: 900px;
+  }
+
+  .steps-list { display: flex; flex-direction: column; gap: 14px; }
+
+  .step-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 13px 16px;
+    transition: all 0.2s;
+  }
+
+  .step-item:hover {
+    border-color: var(--yellow);
+    background: rgba(245,158,11,0.08);
+  }
+
+  .step-num {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--yellow);
+    color: #000;
+    font-weight: 800;
+    font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .step-icon { flex-shrink: 0; }
+  .step-text { font-size: 14px; line-height: 1.4; }
+  .step-text strong { color: var(--text); display: block; margin-bottom: 2px; }
+  .step-text span { color: var(--muted); font-size: 12px; }
+
+  /* Login mockup */
+  .login-mockup {
+    background: #0a0c14;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+
+  .mockup-bar {
+    background: #13151f;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .dot-r { width:10px;height:10px;border-radius:50%;background:#ef4444; }
+  .dot-y { width:10px;height:10px;border-radius:50%;background:#f59e0b; }
+  .dot-g { width:10px;height:10px;border-radius:50%;background:#10b981; }
+
+  .mockup-url {
+    flex: 1;
+    background: #1a1d2e;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 11px;
+    color: var(--muted);
+    margin-left: 8px;
+  }
+
+  .mockup-body {
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .mockup-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .mockup-logo-h {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, #4c1d95, #6d28d9);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 900; color: var(--yellow);
+  }
+
+  .mockup-logo-text { font-size: 18px; font-weight: 800; color: var(--yellow); }
+
+  .mockup-field {
+    width: 100%;
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .mockup-field.focus { border-color: var(--yellow); }
+
+  /* Typing animation */
+  .typing-text {
+    color: var(--text);
+    font-size: 13px;
+    overflow: hidden;
+    white-space: nowrap;
+    border-right: 2px solid var(--yellow);
+    width: 0;
+    animation: typing 2.5s steps(22, end) 0.5s forwards, blink-cursor 0.7s step-end infinite;
+  }
+
+  @keyframes typing {
+    from { width: 0; }
+    to { width: 160px; }
+  }
+
+  @keyframes blink-cursor {
+    0%, 100% { border-right-color: var(--yellow); }
+    50% { border-right-color: transparent; }
+  }
+
+  .mockup-btn {
+    width: 100%;
+    background: linear-gradient(135deg, var(--yellow), var(--orange));
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: default;
+    margin-top: 4px;
+  }
+
+  .tip-note {
+    background: rgba(59,130,246,0.1);
+    border: 1px solid rgba(59,130,246,0.3);
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: #93c5fd;
+    margin-top: 14px;
+    max-width: 900px;
+    text-align: center;
+  }
+
+  /* ========== SLIDE 3 — VISÃO GERAL (MOCKUP BROWSER) ========== */
+  .browser-mockup {
+    background: #0a0c14;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    width: 100%;
+    max-width: 860px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+
+  .browser-bar {
+    background: #13151f;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .browser-url {
+    flex: 1;
+    background: #1a1d2e;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 11px;
+    color: #6ee7b7;
+    margin: 0 10px;
+    font-family: monospace;
+  }
+
+  .browser-content {
+    padding: 0;
+  }
+
+  .dash-header {
+    background: #13151f;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+  }
+
+  .dash-header-brand { display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--yellow); font-size: 14px; }
+  .dash-header-right { display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 11px; }
+
+  .dash-section-label {
+    padding: 6px 14px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .dash-cards-row {
+    display: flex;
+    gap: 8px;
+    padding: 6px 14px 10px;
+    overflow-x: auto;
+  }
+
+  .dash-mini-card {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 11px;
+    min-width: 80px;
+    text-align: center;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .dash-mini-card:hover { border-color: var(--yellow); background: rgba(245,158,11,0.1); }
+
+  .dash-mini-card .dmc-num { font-size: 18px; font-weight: 800; line-height: 1; margin: 2px 0; }
+  .dash-mini-card .dmc-lbl { color: var(--muted); font-size: 10px; }
+
+  .dash-fat-row {
+    display: flex;
+    gap: 8px;
+    padding: 6px 14px 12px;
+  }
+
+  .dash-fat-card {
+    flex: 1;
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 11px;
+    text-align: center;
+  }
+
+  .dash-fat-card .dfc-val { font-size: 15px; font-weight: 800; margin: 2px 0; }
+  .dash-fat-card .dfc-lbl { color: var(--muted); font-size: 10px; }
+
+  /* Setas explicativas */
+  .mockup-with-arrows {
+    position: relative;
+    width: 100%;
+    max-width: 860px;
+  }
+
+  .arrow-label {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .arrow-label-left {
+    left: -180px;
+  }
+
+  .arrow-label-right {
+    right: -190px;
+  }
+
+  .hint-note {
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 10px;
+  }
+
+  /* ========== SLIDE 4 — ALERTAS ========== */
+  .alert-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    width: 100%;
+    max-width: 960px;
+  }
+
+  .alert-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s;
+    position: relative;
+  }
+
+  .alert-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  }
+
+  .alert-card:hover .ac-tooltip { opacity: 1; pointer-events: all; transform: translateY(0); }
+
+  .alert-card .ac-icon { font-size: 26px; margin-bottom: 6px; }
+  .alert-card .ac-num { font-size: 28px; font-weight: 900; margin-bottom: 2px; }
+  .alert-card .ac-name { font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+  .alert-card .ac-desc { font-size: 10px; color: var(--muted); line-height: 1.4; }
+
+  /* Tooltip */
+  .ac-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%) translateY(6px);
+    background: #1a1d2e;
+    border: 1px solid var(--yellow);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 11px;
+    color: var(--text);
+    width: 170px;
+    text-align: left;
+    line-height: 1.5;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.2s;
+    z-index: 50;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+
+  .ac-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--yellow);
+  }
+
+  .alert-card.orange { border-color: rgba(249,115,22,0.4); }
+  .alert-card.orange:hover { border-color: var(--orange); background: rgba(249,115,22,0.08); }
+
+  .alert-card.red { border-color: rgba(239,68,68,0.4); }
+  .alert-card.red:hover { border-color: var(--red); background: rgba(239,68,68,0.08); }
+
+  .alert-card.blue { border-color: rgba(59,130,246,0.4); }
+  .alert-card.blue:hover { border-color: var(--blue); background: rgba(59,130,246,0.08); }
+
+  .priority-badge {
+    position: absolute;
+    top: -8px; right: -8px;
+    background: var(--yellow);
+    color: #000;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 3px 7px;
+    border-radius: 100px;
+    letter-spacing: 0.5px;
+  }
+
+  @keyframes pulse-border {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.6); }
+    50% { box-shadow: 0 0 0 6px rgba(245,158,11,0); }
+  }
+
+  .alert-card.priority { animation: pulse-border 2s infinite; }
+
+  /* Exemplo real */
+  .example-box {
+    background: rgba(245,158,11,0.06);
+    border: 1px solid rgba(245,158,11,0.25);
+    border-radius: 14px;
+    padding: 14px 20px;
+    width: 100%;
+    max-width: 960px;
+    margin-top: 14px;
+  }
+
+  .example-box .ex-title { font-size: 12px; font-weight: 700; color: var(--yellow); margin-bottom: 10px; letter-spacing: 0.5px; }
+
+  .calc-steps {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .calc-step {
+    background: var(--card2);
+    border-radius: 10px;
+    padding: 8px 14px;
+    text-align: center;
+    font-size: 13px;
+  }
+
+  .calc-step .cs-val { font-size: 18px; font-weight: 800; color: var(--yellow); }
+  .calc-step .cs-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .calc-arrow { font-size: 18px; color: var(--orange); }
+  .calc-result { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); }
+  .calc-result .cs-val { color: var(--green); }
+
+  /* ========== SLIDE 5 — CLIENTES QUENTES ========== */
+  #slide-5 { background: radial-gradient(ellipse at 60% 40%, rgba(249,115,22,0.08) 0%, var(--bg) 60%); }
+
+  .hot-layout {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 32px;
+    width: 100%;
+    max-width: 860px;
+    align-items: start;
+  }
+
+  .hot-icon-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .timeline {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+    width: 100%;
+  }
+
+  .timeline-title { font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+
+  .tl-track {
+    position: relative;
+    height: 6px;
+    background: var(--card2);
+    border-radius: 3px;
+    margin: 20px 0 28px;
+  }
+
+  .tl-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 75%;
+    background: linear-gradient(90deg, var(--green), var(--yellow), var(--orange));
+    border-radius: 3px;
+  }
+
+  .tl-markers {
+    display: flex;
+    justify-content: space-between;
+    position: absolute;
+    top: -20px; left: 0; right: 0;
+  }
+
+  .tl-marker {
+    font-size: 10px;
+    color: var(--muted);
+    text-align: center;
+    transform: translateX(-50%);
+  }
+
+  .tl-now {
+    position: absolute;
+    right: 22%;
+    top: -26px;
+    background: var(--orange);
+    color: #fff;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .tl-now::after {
+    content: '';
+    position: absolute;
+    bottom: -5px; left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--orange);
+    border-bottom: none;
+  }
+
+  .action-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .action-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(16,185,129,0.08);
+    border: 1px solid rgba(16,185,129,0.25);
+    border-radius: 10px;
+    padding: 9px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #6ee7b7;
+  }
+
+  /* Mini card de cliente */
+  .client-card-demo {
+    background: var(--card2);
+    border: 1px solid rgba(249,115,22,0.4);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    font-size: 12px;
+  }
+
+  .client-card-demo .ccd-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .client-card-demo .ccd-name { font-weight: 800; font-size: 13px; }
+  .client-card-demo .ccd-badge {
+    background: rgba(249,115,22,0.2);
+    border: 1px solid rgba(249,115,22,0.5);
+    color: #fdba74;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .client-card-demo .ccd-row {
+    display: flex;
+    gap: 16px;
+    color: var(--muted);
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+
+  .client-card-demo .ccd-val { font-weight: 700; font-size: 14px; color: var(--green); }
+
+  /* Speech bubble */
+  .speech-bubble {
+    background: var(--card);
+    border: 1px solid rgba(59,130,246,0.4);
+    border-radius: 14px;
+    padding: 14px 16px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text);
+    position: relative;
+    width: 100%;
+  }
+
+  .speech-bubble::before {
+    content: '';
+    position: absolute;
+    top: -10px;
+    left: 20px;
+    border: 10px solid transparent;
+    border-bottom-color: rgba(59,130,246,0.4);
+    border-top: none;
+  }
+
+  .speech-bubble::after {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 21px;
+    border: 9px solid transparent;
+    border-bottom-color: var(--card);
+    border-top: none;
+  }
+
+  .speech-bubble .sb-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--blue);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  /* ========== SLIDE 6 — INATIVOS ========== */
+  .risk-bar {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    width: 100%;
+    max-width: 700px;
+    margin-bottom: 14px;
+  }
+
+  .risk-track {
+    position: relative;
+    height: 14px;
+    border-radius: 7px;
+    overflow: hidden;
+    display: flex;
+    margin: 20px 0 14px;
+  }
+
+  .risk-segment {
+    flex: 1;
+    height: 100%;
+  }
+
+  .risk-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .risk-ticks {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  /* SVG gráfico de recuperação */
+  .recovery-chart {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    width: 100%;
+    max-width: 700px;
+    margin-bottom: 14px;
+  }
+
+  .recovery-chart .rc-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* Custo da inatividade */
+  .cost-box {
+    background: rgba(239,68,68,0.06);
+    border: 1px solid rgba(239,68,68,0.25);
+    border-radius: 12px;
+    padding: 14px 18px;
+    width: 100%;
+    max-width: 700px;
+  }
+
+  .cost-box .cb-title { font-size: 12px; font-weight: 700; color: var(--red); margin-bottom: 10px; }
+
+  .cost-rows { display: flex; flex-direction: column; gap: 6px; }
+
+  .cost-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    padding: 6px 10px;
+    background: rgba(239,68,68,0.08);
+    border-radius: 8px;
+  }
+
+  .cost-row .cr-period { color: var(--muted); }
+  .cost-row .cr-val { font-weight: 700; color: var(--red); }
+
+  .inact-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    max-width: 700px;
+  }
+
+  .inact-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+  }
+
+  .inact-badge {
+    width: 34px; height: 34px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+  }
+
+  .inact-row .inact-period { font-weight: 700; font-size: 12px; color: var(--text); }
+  .inact-row .inact-action { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* ========== SLIDE 7 — FATURAMENTO ========== */
+  .fat-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    width: 100%;
+    max-width: 900px;
+  }
+
+  .fat-card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 20px 16px;
+    border: 1px solid var(--border);
+    transition: all 0.25s;
+  }
+
+  .fat-card:hover { transform: translateY(-3px); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+
+  .fat-card.green { border-top: 3px solid var(--green); }
+  .fat-card.purple { border-top: 3px solid var(--purple); }
+  .fat-card.orange { border-top: 3px solid var(--orange); }
+
+  .fat-icon { font-size: 28px; margin-bottom: 10px; }
+  .fat-card-title { font-size: 14px; font-weight: 700; margin-bottom: 5px; }
+  .fat-card-desc { font-size: 11px; color: var(--muted); line-height: 1.5; margin-bottom: 12px; }
+  .fat-card-hint { font-size: 10px; padding: 5px 10px; border-radius: 8px; font-weight: 600; }
+
+  .fat-card.green .fat-card-hint { background: rgba(16,185,129,0.15); color: #6ee7b7; }
+  .fat-card.purple .fat-card-hint { background: rgba(139,92,246,0.15); color: #c4b5fd; }
+  .fat-card.orange .fat-card-hint { background: rgba(249,115,22,0.15); color: #fdba74; }
+
+  /* Gauge SVG */
+  .gauge-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .gauge-svg { overflow: visible; }
+
+  .gauge-bg {
+    fill: none;
+    stroke: #2d3248;
+    stroke-width: 12;
+    stroke-linecap: round;
+  }
+
+  .gauge-fill {
+    fill: none;
+    stroke: url(#gaugeGrad);
+    stroke-width: 12;
+    stroke-linecap: round;
+    stroke-dasharray: 219.9;
+    stroke-dashoffset: 219.9;
+    transition: stroke-dashoffset 1.5s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .gauge-fill.animate {
+    stroke-dashoffset: 28.6;
+  }
+
+  .gauge-num {
+    font-size: 28px;
+    font-weight: 900;
+    fill: var(--yellow);
+    text-anchor: middle;
+  }
+
+  .gauge-pct {
+    font-size: 12px;
+    fill: var(--muted);
+    text-anchor: middle;
+  }
+
+  .gauge-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--muted);
+    width: 130px;
+    margin-top: -6px;
+  }
+
+  /* Fluxo de clique */
+  .click-flow {
+    background: rgba(16,185,129,0.06);
+    border: 1px solid rgba(16,185,129,0.25);
+    border-radius: 14px;
+    padding: 12px 18px;
+    width: 100%;
+    max-width: 900px;
+    margin-top: 14px;
+  }
+
+  .click-flow .cf-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .cf-steps {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .cf-step {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    opacity: 0;
+    transition: all 0.3s;
+  }
+
+  .cf-step.show { opacity: 1; }
+
+  .cf-arrow { color: var(--yellow); font-size: 14px; padding: 0 4px; }
+
+  /* ========== SLIDE 8 — NAVEGAR / FILTROS ========== */
+  .nav-flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+    max-width: 620px;
+  }
+
+  .flow-block {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 18px;
+    text-align: center;
+    transition: all 0.2s;
+    cursor: default;
+  }
+
+  .flow-block:hover { border-color: var(--yellow); background: rgba(245,158,11,0.05); }
+
+  .flow-block .fb-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px; }
+  .flow-block .fb-title { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+  .flow-block .fb-desc { font-size: 11px; color: var(--muted); }
+
+  .flow-arrow-label {
+    font-size: 11px;
+    color: var(--yellow);
+    text-align: center;
+    margin: 4px 0;
+    font-weight: 600;
+  }
+
+  /* Seletor de mês mockup */
+  .month-filter-mockup {
+    background: var(--card);
+    border: 1px solid rgba(59,130,246,0.4);
+    border-radius: 14px;
+    padding: 16px 20px;
+    width: 100%;
+    max-width: 620px;
+    margin-top: 16px;
+  }
+
+  .mfm-select {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    cursor: default;
+  }
+
+  .mfm-hint {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .mfm-hint-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #93c5fd;
+  }
+
+  .filter-note {
+    background: rgba(59,130,246,0.1);
+    border: 1px solid rgba(59,130,246,0.3);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 12px;
+    color: #93c5fd;
+    margin-top: 14px;
+    text-align: center;
+    max-width: 620px;
+  }
+
+  /* ========== SLIDE 9 — ROTINA SEMANAL ========== */
+  #slide-9 {
+    background: radial-gradient(ellipse at 50% 30%, rgba(59,130,246,0.06) 0%, var(--bg) 65%);
+  }
+
+  .weekly-cols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    width: 100%;
+    max-width: 760px;
+    margin-bottom: 20px;
+  }
+
+  .weekly-col {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 16px;
+    text-align: center;
+    transition: all 0.2s;
+  }
+
+  .weekly-col:hover { transform: translateY(-3px); box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+
+  .weekly-col:nth-child(1) { border-top: 3px solid var(--orange); }
+  .weekly-col:nth-child(2) { border-top: 3px solid var(--blue); }
+  .weekly-col:nth-child(3) { border-top: 3px solid var(--green); }
+
+  .wc-day { font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 14px; color: var(--muted); }
+  .wc-day.mon { color: var(--orange); }
+  .wc-day.wed { color: var(--blue); }
+  .wc-day.fri { color: var(--green); }
+
+  .wc-items { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+
+  .wc-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--card2);
+    border-radius: 10px;
+    padding: 9px 12px;
+    width: 100%;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .wc-icon { font-size: 20px; flex-shrink: 0; }
+
+  .weekly-motto {
+    background: rgba(245,158,11,0.1);
+    border: 1px solid rgba(245,158,11,0.3);
+    border-radius: 100px;
+    padding: 12px 28px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--yellow);
+    text-align: center;
+  }
+
+  /* ========== SLIDE 10 — MATRIZ ========== */
+  .matrix-wrapper {
+    width: 100%;
+    max-width: 760px;
+  }
+
+  .matrix-axes {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+  }
+
+  .matrix-y-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    align-self: center;
+  }
+
+  .matrix-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .matrix-cell {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    min-height: 120px;
+    transition: all 0.2s;
+    cursor: default;
+  }
+
+  .matrix-cell:hover { transform: scale(1.02); }
+
+  .matrix-cell.highlight {
+    border-color: var(--yellow);
+    background: rgba(245,158,11,0.08);
+    box-shadow: 0 0 20px rgba(245,158,11,0.15), inset 0 0 40px rgba(245,158,11,0.03);
+  }
+
+  .mc-label { font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+  .mc-items { display: flex; flex-direction: column; gap: 5px; }
+  .mc-item { font-size: 12px; font-weight: 600; }
+  .mc-nums { font-size: 10px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+
+  .matrix-x-labels {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr;
+    gap: 10px;
+    margin-top: 6px;
+  }
+
+  .mx-spacer { }
+  .mx-label { text-align: center; font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+  .matrix-footer {
+    background: rgba(245,158,11,0.1);
+    border: 1px solid rgba(245,158,11,0.3);
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 12px;
+    color: var(--yellow);
+    margin-top: 14px;
+    text-align: center;
+    font-weight: 600;
+  }
+
+  /* ========== SLIDE 11 — OBJETIVO ========== */
+  #slide-11 {
+    background: radial-gradient(ellipse at 50% 40%, rgba(245,158,11,0.06) 0%, var(--bg) 60%);
+  }
+
+  /* Resumo 3 números */
+  .three-nums {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    width: 100%;
+    max-width: 720px;
+    margin-bottom: 24px;
+  }
+
+  .three-num-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px 14px;
+    text-align: center;
+    transition: all 0.25s;
+  }
+
+  .three-num-card:hover { transform: translateY(-3px); }
+
+  .three-num-card:nth-child(1) { border-top: 3px solid var(--orange); }
+  .three-num-card:nth-child(2) { border-top: 3px solid var(--red); }
+  .three-num-card:nth-child(3) { border-top: 3px solid var(--blue); }
+
+  .tn-num { font-size: 36px; font-weight: 900; }
+  .tn-num.orange { color: var(--orange); }
+  .tn-num.red { color: var(--red); }
+  .tn-num.blue { color: var(--blue); }
+  .tn-label { font-size: 13px; font-weight: 700; margin-top: 4px; }
+  .tn-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  .main-phrase {
+    font-size: clamp(20px, 3.5vw, 38px);
+    font-weight: 900;
+    color: var(--yellow);
+    text-align: center;
+    margin-bottom: 24px;
+    line-height: 1.2;
+  }
+
+  .pillars {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    width: 100%;
+    max-width: 720px;
+    margin-bottom: 22px;
+  }
+
+  .pillar {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 14px;
+    text-align: center;
+    transition: all 0.25s;
+  }
+
+  .pillar:hover { transform: translateY(-3px); }
+  .pillar .p-icon { font-size: 30px; margin-bottom: 8px; }
+  .pillar .p-name { font-size: 16px; font-weight: 800; margin-bottom: 5px; }
+  .pillar .p-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+  .pillar:nth-child(1) { border-top: 3px solid var(--blue); }
+  .pillar:nth-child(2) { border-top: 3px solid var(--orange); }
+  .pillar:nth-child(3) { border-top: 3px solid var(--green); }
+
+  .cycle-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 10px 22px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+    max-width: 680px;
+    gap: 2px;
+  }
+
+  .cycle-item { font-size: 12px; font-weight: 700; color: var(--text); padding: 3px 6px; }
+  .cycle-arrow { color: var(--yellow); font-size: 15px; padding: 0 3px; }
+
+  .footer-note {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    max-width: 480px;
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+
+  .btn-secondary {
+    background: transparent;
+    border: 2px solid var(--yellow);
+    color: var(--yellow);
+    padding: 11px 26px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-secondary:hover {
+    background: var(--yellow);
+    color: #000;
+  }
+
+  /* RESPONSIVIDADE */
+  @media (max-width: 768px) {
+    .slide { padding: 14px 18px 76px; }
+    .two-col { grid-template-columns: 1fr; }
+    .alert-cards-grid { grid-template-columns: 1fr 1fr; }
+    .fat-cards { grid-template-columns: 1fr; }
+    .pillars { grid-template-columns: 1fr; }
+    .hot-layout { grid-template-columns: 1fr; }
+    .hot-icon-wrapper { display: none; }
+    .matrix-grid { grid-template-columns: 1fr; }
+    .weekly-cols { grid-template-columns: 1fr; }
+    .three-nums { grid-template-columns: 1fr; }
+    .float-card-1, .float-card-3 { display: none; }
+    .float-card-2 { right: 2%; top: 10%; }
+  }
+
+  @media (max-width: 500px) {
+    .alert-cards-grid { grid-template-columns: 1fr; }
+    .logo-text { font-size: 28px; }
+    .logo-h { width: 48px; height: 48px; font-size: 26px; }
+    #slide-dots { display: none; }
+    .fat-cards { grid-template-columns: 1fr; }
+    .cf-steps { flex-direction: column; align-items: flex-start; }
+  }
+
+  .slide-inner {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+</style>
+</head>
+<body>
+
+<!-- PROGRESS BAR -->
+<div id="progress-bar" style="width: 9.09%;"></div>
+
+<!-- SLIDES WRAPPER -->
+<div id="slides-wrapper">
+
+  <!-- ===== SLIDE 1 — CAPA ===== -->
+  <div class="slide active" id="slide-1">
+    <div class="cover-dots"></div>
+
+    <!-- Mini cards flutuantes -->
+    <div class="floating-cards-wrapper">
+      <div class="float-card float-card-1">🔥 <span>89 Clientes Quentes</span></div>
+      <div class="float-card float-card-2">💰 <span>R$ 1,2M Faturamento</span></div>
+      <div class="float-card float-card-3">🎯 <span>87% Meta Atingida</span></div>
+    </div>
+
+    <div class="logo-wrapper">
+      <div class="logo-h">H</div>
+      <div class="logo-text">HANOVA</div>
+    </div>
+    <div class="cover-title">Dashboard Comercial</div>
+    <div class="cover-subtitle">Seu guia completo para acompanhar sua carteira de clientes e agir no momento certo</div>
+    <div class="badge">📋 Guia do Representante</div>
+    <button class="btn-primary" onclick="goToSlide(2)">Começar &rarr;</button>
+  </div>
+
+  <!-- ===== SLIDE 2 — COMO ACESSAR ===== -->
+  <div class="slide" id="slide-2">
+    <div class="slide-title">🔐 Acessando o Dashboard</div>
+    <div class="slide-subtitle">Siga esses 4 passos simples para entrar</div>
+    <div class="two-col" style="max-width:860px;">
+      <!-- Passos -->
+      <div class="steps-list">
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-icon">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+              <rect x="2" y="6" width="28" height="20" rx="3" stroke="#3b82f6" stroke-width="2" fill="rgba(59,130,246,0.1)"/>
+              <rect x="2" y="6" width="28" height="7" rx="3" fill="rgba(59,130,246,0.2)" stroke="#3b82f6" stroke-width="2"/>
+              <circle cx="7" cy="9.5" r="1.5" fill="#ef4444"/>
+              <circle cx="12" cy="9.5" r="1.5" fill="#f59e0b"/>
+              <circle cx="17" cy="9.5" r="1.5" fill="#10b981"/>
+            </svg>
+          </div>
+          <div class="step-text">
+            <strong>Abra o navegador</strong>
+            <span>Chrome, Edge ou Firefox</span>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-icon">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+              <circle cx="16" cy="16" r="12" stroke="#f59e0b" stroke-width="2" fill="rgba(245,158,11,0.1)"/>
+              <path d="M10 16 Q12 10 16 10 Q20 10 22 14" stroke="#f59e0b" stroke-width="2" fill="none" stroke-linecap="round"/>
+              <circle cx="22" cy="16" r="3" fill="#f59e0b"/>
+              <path d="M22 20 L24 26" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="step-text">
+            <strong>Acesse o link do sistema</strong>
+            <span>grupohnv.github.io/hanova/dashboard_hanova.html</span>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-icon">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+              <rect x="8" y="14" width="16" height="13" rx="3" stroke="#10b981" stroke-width="2" fill="rgba(16,185,129,0.1)"/>
+              <path d="M11 14 V10 a5 5 0 0 1 10 0 V14" stroke="#10b981" stroke-width="2" fill="none" stroke-linecap="round"/>
+              <circle cx="16" cy="21" r="2" fill="#10b981"/>
+            </svg>
+          </div>
+          <div class="step-text">
+            <strong>Digite login e senha</strong>
+            <span>Suas credenciais pessoais</span>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">4</div>
+          <div class="step-icon">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+              <circle cx="16" cy="16" r="12" stroke="#8b5cf6" stroke-width="2" fill="rgba(139,92,246,0.1)"/>
+              <path d="M11 16 H21 M17 12 L21 16 L17 20" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="step-text">
+            <strong>Clique em Entrar</strong>
+            <span>Acesso imediato ao dashboard</span>
+          </div>
+        </div>
+      </div>
+      <!-- Mockup de login com typing animation -->
+      <div class="login-mockup">
+        <div class="mockup-bar">
+          <div class="dot-r"></div>
+          <div class="dot-y"></div>
+          <div class="dot-g"></div>
+          <div class="mockup-url">grupohnv.github.io/hanova/dashboard_hanova.html</div>
+        </div>
+        <div class="mockup-body">
+          <div class="mockup-logo">
+            <div class="mockup-logo-h">H</div>
+            <div class="mockup-logo-text">HANOVA</div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Acesse sua conta</div>
+          <div class="mockup-field focus">
+            <span class="typing-text">representante@hanova.com</span>
+          </div>
+          <div class="mockup-field">
+            <span>••••••••</span>
+            <span style="font-size:14px;cursor:pointer;">👁</span>
+          </div>
+          <button class="mockup-btn">Entrar →</button>
+        </div>
+      </div>
+    </div>
+    <div class="tip-note">💡 Dica: salve o link nos favoritos do navegador para acessar com 1 clique</div>
+  </div>
+
+  <!-- ===== SLIDE 3 — VISÃO GERAL (MOCKUP REALISTA) ===== -->
+  <div class="slide" id="slide-3">
+    <div class="slide-title">📊 Como você vê o dashboard</div>
+    <div class="slide-subtitle">Um mockup real de tudo que aparece na tela — 3 seções, tudo de um jeito só</div>
+
+    <div style="position:relative;width:100%;max-width:860px;">
+      <div class="browser-mockup">
+        <!-- Barra do browser -->
+        <div class="browser-bar">
+          <div class="dot-r"></div>
+          <div class="dot-y"></div>
+          <div class="dot-g"></div>
+          <div class="browser-url">grupohnv.github.io/hanova/dashboard_hanova.html</div>
+        </div>
+
+        <!-- Header do dashboard -->
+        <div class="dash-header">
+          <div class="dash-header-brand">
+            <div style="width:22px;height:22px;background:linear-gradient(135deg,#4c1d95,#6d28d9);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#f59e0b;">H</div>
+            HANOVA &nbsp;·&nbsp; Dashboard Comercial
+          </div>
+          <div class="dash-header-right">
+            <span>📅 Maio/2026</span>
+            <span style="background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;">👤 Mês ▼</span>
+          </div>
+        </div>
+
+        <!-- Seção Alertas -->
+        <div class="dash-section-label" style="color:#fca5a5;background:rgba(239,68,68,0.07);">🚨 ALERTAS DE COMPORTAMENTO</div>
+        <div class="dash-cards-row">
+          <div class="dash-mini-card" style="border-color:rgba(249,115,22,0.5);">
+            <div>🔥</div>
+            <div class="dmc-num" style="color:var(--orange);">89</div>
+            <div class="dmc-lbl">Quentes</div>
+          </div>
+          <div class="dash-mini-card" style="border-color:rgba(239,68,68,0.4);">
+            <div>▼</div>
+            <div class="dmc-num" style="color:var(--red);">132</div>
+            <div class="dmc-lbl">SKU ↓</div>
+          </div>
+          <div class="dash-mini-card" style="border-color:rgba(249,115,22,0.4);">
+            <div>⚠️</div>
+            <div class="dmc-num" style="color:var(--orange);">64</div>
+            <div class="dmc-lbl">Ciclo ↑</div>
+          </div>
+          <div class="dash-mini-card" style="border-color:rgba(239,68,68,0.5);">
+            <div>🔴</div>
+            <div class="dmc-num" style="color:var(--red);">190</div>
+            <div class="dmc-lbl">Inativos</div>
+          </div>
+          <div class="dash-mini-card" style="border-color:rgba(59,130,246,0.4);">
+            <div>🔵</div>
+            <div class="dmc-num" style="color:var(--blue);">189</div>
+            <div class="dmc-lbl">&lt;30 SKUs</div>
+          </div>
+        </div>
+
+        <!-- Seção Faturamento -->
+        <div class="dash-section-label" style="color:#6ee7b7;background:rgba(16,185,129,0.07);border-top:1px solid var(--border);">💰 FATURAMENTO</div>
+        <div class="dash-fat-row">
+          <div class="dash-fat-card" style="border-color:rgba(16,185,129,0.3);">
+            <div class="dfc-val" style="color:var(--green);">R$ 1,2M</div>
+            <div class="dfc-lbl">Mês Atual</div>
+          </div>
+          <div class="dash-fat-card">
+            <div class="dfc-val" style="color:var(--muted);">R$ 980k</div>
+            <div class="dfc-lbl">Mês Ant.</div>
+          </div>
+          <div class="dash-fat-card">
+            <div class="dfc-val" style="color:var(--muted);">R$ 1,1M</div>
+            <div class="dfc-lbl">Ano Ant.</div>
+          </div>
+          <div class="dash-fat-card" style="border-color:rgba(139,92,246,0.3);">
+            <div class="dfc-val" style="color:var(--purple);">87% 🎯</div>
+            <div class="dfc-lbl">Meta</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Setas explicativas -->
+      <div style="display:flex;gap:12px;margin-top:12px;justify-content:center;flex-wrap:wrap;">
+        <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:8px 14px;font-size:12px;color:#fca5a5;font-weight:600;">
+          ← Alertas: aja <strong>AGORA</strong>
+        </div>
+        <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:8px 14px;font-size:12px;color:#6ee7b7;font-weight:600;">
+          ← Faturamento: acompanhe seus números
+        </div>
+      </div>
+    </div>
+
+    <div class="hint-note" style="margin-top:12px;">👆 Clique em qualquer card para ver o detalhe por cliente</div>
+  </div>
+
+  <!-- ===== SLIDE 4 — ALERTAS ===== -->
+  <div class="slide" id="slide-4">
+    <div class="slide-title">🚨 Alertas — Sua Primeira Parada Todo Dia</div>
+    <div class="slide-subtitle">Esses 5 cards mostram onde agir AGORA — passe o mouse para ver o que fazer</div>
+
+    <div class="alert-cards-grid">
+      <!-- Quentes -->
+      <div class="alert-card orange priority">
+        <div class="priority-badge">⭐ PRIORIDADE</div>
+        <div class="ac-icon">🔥</div>
+        <div class="ac-num" style="color:var(--orange);" data-count="89">0</div>
+        <div class="ac-name" style="color:var(--orange);">Clientes Quentes</div>
+        <div class="ac-desc">Entraram na janela de recompra. <strong style="color:var(--text);">Hora de ligar!</strong></div>
+        <div class="ac-tooltip">📞 <strong>Ação:</strong> Ligue hoje. Ofereça os produtos do histórico. Não espere ele sumir.</div>
+      </div>
+
+      <!-- SKU -->
+      <div class="alert-card red">
+        <div class="ac-icon">▼</div>
+        <div class="ac-num" style="color:var(--red);" data-count="132">0</div>
+        <div class="ac-name" style="color:var(--red);">Diminuíram SKU</div>
+        <div class="ac-desc">Comprando menos produtos. Risco de perder mix.</div>
+        <div class="ac-tooltip">📦 <strong>Ação:</strong> Apresente novidades. Pergunte o que está faltando no pedido.</div>
+      </div>
+
+      <!-- Ciclo -->
+      <div class="alert-card orange">
+        <div class="ac-icon">⚠️</div>
+        <div class="ac-num" style="color:var(--orange);" data-count="64">0</div>
+        <div class="ac-name" style="color:var(--orange);">Aumentaram Ciclo</div>
+        <div class="ac-desc">Demorando mais para comprar. Sinal de atenção.</div>
+        <div class="ac-tooltip">⏰ <strong>Ação:</strong> Verifique o motivo. Pode ser estoque cheio ou concorrente.</div>
+      </div>
+
+      <!-- Inativos -->
+      <div class="alert-card red priority">
+        <div class="priority-badge">⭐ PRIORIDADE</div>
+        <div class="ac-icon">🔴</div>
+        <div class="ac-num" style="color:var(--red);" data-count="190">0</div>
+        <div class="ac-name" style="color:var(--red);">Inativos 90+ dias</div>
+        <div class="ac-desc">Sem comprar há 3 meses. <strong style="color:var(--text);">Recuperação urgente.</strong></div>
+        <div class="ac-tooltip">🚨 <strong>Ação:</strong> Ligação imediata. Oferta especial de reativação. Cada mês aumenta o risco.</div>
+      </div>
+
+      <!-- SKUs -->
+      <div class="alert-card blue">
+        <div class="ac-icon">🔵</div>
+        <div class="ac-num" style="color:var(--blue);" data-count="189">0</div>
+        <div class="ac-name" style="color:var(--blue);">&lt; 30 SKUs</div>
+        <div class="ac-desc">Potencial de ampliar o mix. Cross-sell.</div>
+        <div class="ac-tooltip">🛍 <strong>Ação:</strong> Apresente catálogo completo. Sugira categorias que ele não compra.</div>
+      </div>
+    </div>
+
+    <!-- Exemplo real -->
+    <div class="example-box">
+      <div class="ex-title">📌 EXEMPLO REAL — O QUE 89 CLIENTES QUENTES SIGNIFICAM PARA VOCÊ:</div>
+      <div class="calc-steps">
+        <div class="calc-step">
+          <div class="cs-val">89</div>
+          <div class="cs-lbl">Clientes quentes</div>
+        </div>
+        <div class="calc-arrow">×30%</div>
+        <div class="calc-step">
+          <div class="cs-val">26</div>
+          <div class="cs-lbl">ligações na semana</div>
+        </div>
+        <div class="calc-arrow">×40%</div>
+        <div class="calc-step calc-result">
+          <div class="cs-val">10</div>
+          <div class="cs-lbl">pedidos extras/mês</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SLIDE 5 — CLIENTES QUENTES ===== -->
+  <div class="slide" id="slide-5">
+    <div class="slide-title">🔥 Clientes Quentes — Aja Agora!</div>
+    <div class="slide-subtitle">O momento certo para cada cliente, identificado automaticamente</div>
+
+    <div class="hot-layout">
+      <div class="hot-icon-wrapper">
+        <svg width="72" height="90" viewBox="0 0 80 100" fill="none">
+          <path d="M40 95 C20 80 10 65 15 45 C18 35 25 30 30 25 C28 38 35 42 38 38 C40 30 45 20 55 10 C58 25 52 35 50 42 C56 38 62 30 65 20 C72 35 72 55 65 70 C60 80 52 88 40 95Z" fill="url(#fireGrad)" opacity="0.95"/>
+          <path d="M40 85 C28 72 24 58 28 46 C30 40 35 36 37 33 C36 42 40 46 42 43 C44 37 47 28 54 20 C56 30 52 38 50 44 C54 42 58 36 60 28 C65 40 65 56 58 68 C54 76 48 82 40 85Z" fill="url(#fireGrad2)"/>
+          <defs>
+            <linearGradient id="fireGrad" x1="40" y1="10" x2="40" y2="95" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#f59e0b"/>
+              <stop offset="60%" stop-color="#f97316"/>
+              <stop offset="100%" stop-color="#ef4444"/>
+            </linearGradient>
+            <linearGradient id="fireGrad2" x1="40" y1="20" x2="40" y2="85" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#fde68a"/>
+              <stop offset="100%" stop-color="#f97316"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <div style="font-size:11px;color:var(--orange);font-weight:700;text-align:center;">JANELA<br>ABERTA</div>
+      </div>
+
+      <div>
+        <!-- Mini card do cliente -->
+        <div class="client-card-demo" style="margin-bottom:12px;">
+          <div class="ccd-header">
+            <div class="ccd-name">FARMÁCIA SÃO PAULO</div>
+            <div class="ccd-badge">🔥 MENSAL</div>
+          </div>
+          <div class="ccd-row">
+            <span>📅 Último pedido: <strong style="color:var(--text);">28/03/2026</strong></span>
+            <span>🔁 Ciclo médio: <strong style="color:var(--text);">28 dias</strong></span>
+          </div>
+          <div class="ccd-row">
+            <span>📉 Meses s/ compra: <strong style="color:var(--orange);">1,8</strong></span>
+            <span>💰 Valor estimado: <span class="ccd-val">R$ 4.200</span></span>
+          </div>
+        </div>
+
+        <div class="timeline">
+          <div class="timeline-title">Como funciona — Janela de Recompra</div>
+          <div style="position:relative;height:56px;">
+            <div class="tl-track">
+              <div class="tl-fill"></div>
+            </div>
+            <div class="tl-markers">
+              <div class="tl-marker" style="transform:none;">📦 Última<br><span style="color:var(--green);">compra</span></div>
+              <div class="tl-marker">Ciclo<br><span style="color:var(--yellow);">médio</span></div>
+              <div class="tl-marker" style="transform:none;text-align:right;">🔥 Agora<br><span style="color:var(--orange);">comprar!</span></div>
+            </div>
+            <div class="tl-now">Janela aberta 🔥</div>
+          </div>
+        </div>
+
+        <!-- Script de ligação -->
+        <div class="speech-bubble">
+          <div class="sb-label">💬 Script de ligação</div>
+          "Olá [Nome], aqui é [Seu Nome] da Hanova. Vi que faz um tempo desde o seu último pedido e já temos novidades no catálogo que combinam muito com o que você costuma pedir. Posso te enviar as novidades?"
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SLIDE 6 — INATIVOS ===== -->
+  <div class="slide" id="slide-6">
+    <div class="slide-title">🔴 Inativos — Recuperação Urgente</div>
+    <div class="slide-subtitle">Cada mês sem compra aumenta o risco de perda definitiva</div>
+
+    <!-- Gráfico de recuperação SVG -->
+    <div class="recovery-chart">
+      <div class="rc-title">Probabilidade de recuperação cai com o tempo</div>
+      <svg width="100%" height="90" viewBox="0 0 460 90" preserveAspectRatio="xMidYMid meet" style="overflow:visible;">
+        <defs>
+          <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#10b981"/>
+            <stop offset="40%" stop-color="#f59e0b"/>
+            <stop offset="80%" stop-color="#ef4444"/>
+            <stop offset="100%" stop-color="#7f1d1d"/>
+          </linearGradient>
+        </defs>
+        <!-- Grid lines -->
+        <line x1="40" y1="10" x2="440" y2="10" stroke="#2d3248" stroke-width="1" stroke-dasharray="4,4"/>
+        <line x1="40" y1="30" x2="440" y2="30" stroke="#2d3248" stroke-width="1" stroke-dasharray="4,4"/>
+        <line x1="40" y1="50" x2="440" y2="50" stroke="#2d3248" stroke-width="1" stroke-dasharray="4,4"/>
+        <line x1="40" y1="70" x2="440" y2="70" stroke="#2d3248" stroke-width="1" stroke-dasharray="4,4"/>
+        <!-- Y labels -->
+        <text x="34" y="14" fill="#64748b" font-size="9" text-anchor="end">100%</text>
+        <text x="34" y="54" fill="#64748b" font-size="9" text-anchor="end">60%</text>
+        <text x="34" y="74" fill="#64748b" font-size="9" text-anchor="end">20%</text>
+        <!-- Linha da curva -->
+        <polyline points="40,10 140,28 240,50 340,68 440,78" fill="none" stroke="url(#lineGrad)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+        <!-- Pontos -->
+        <circle cx="40" cy="10" r="5" fill="#10b981"/>
+        <circle cx="140" cy="28" r="5" fill="#f59e0b"/>
+        <circle cx="240" cy="50" r="5" fill="#f97316"/>
+        <circle cx="340" cy="68" r="5" fill="#ef4444"/>
+        <circle cx="440" cy="78" r="5" fill="#7f1d1d"/>
+        <!-- X labels -->
+        <text x="40" y="88" fill="#64748b" font-size="9" text-anchor="middle">0</text>
+        <text x="140" y="88" fill="#64748b" font-size="9" text-anchor="middle">3 meses</text>
+        <text x="240" y="88" fill="#64748b" font-size="9" text-anchor="middle">6 meses</text>
+        <text x="340" y="88" fill="#64748b" font-size="9" text-anchor="middle">9 meses</text>
+        <text x="440" y="88" fill="#64748b" font-size="9" text-anchor="middle">12m+</text>
+      </svg>
+    </div>
+
+    <div style="display:flex;gap:14px;width:100%;max-width:700px;margin-bottom:12px;flex-wrap:wrap;">
+      <!-- Barra de risco -->
+      <div class="risk-bar" style="flex:1;min-width:260px;margin-bottom:0;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Escala de Risco</div>
+        <div class="risk-ticks">
+          <span>0</span><span>90d</span><span>180d</span><span>365d+</span>
+        </div>
+        <div class="risk-track">
+          <div class="risk-segment" style="background:#10b981;"></div>
+          <div class="risk-segment" style="background:#f59e0b;"></div>
+          <div class="risk-segment" style="background:#ef4444;"></div>
+          <div class="risk-segment" style="background:#7f1d1d;"></div>
+        </div>
+        <div class="risk-labels">
+          <span style="color:#6ee7b7;">✓ Ok</span>
+          <span style="color:#fde68a;">⚠ Atenção</span>
+          <span style="color:#fca5a5;">🔴 Crítico</span>
+          <span style="color:#9b1c1c;">💀 Perdido</span>
+        </div>
+      </div>
+
+      <!-- Custo da inatividade -->
+      <div class="cost-box" style="flex:1;min-width:220px;">
+        <div class="cb-title">💸 Quanto custa não agir?</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Cliente que compra R$ 2.000/mês:</div>
+        <div class="cost-rows">
+          <div class="cost-row">
+            <span class="cr-period">3 meses parado</span>
+            <span class="cr-val">R$ 6.000 perdidos</span>
+          </div>
+          <div class="cost-row">
+            <span class="cr-period">6 meses parado</span>
+            <span class="cr-val">R$ 12.000 perdidos</span>
+          </div>
+          <div class="cost-row">
+            <span class="cr-period">12 meses parado</span>
+            <span class="cr-val">R$ 24.000 perdidos</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="inact-actions" style="max-width:700px;">
+      <div class="inact-row">
+        <div class="inact-badge" style="background:rgba(245,158,11,0.2);">🟡</div>
+        <div>
+          <div class="inact-period">3 a 6 meses sem comprar</div>
+          <div class="inact-action">Ligação de reativação + oferta especial para o cliente retornar</div>
+        </div>
+      </div>
+      <div class="inact-row">
+        <div class="inact-badge" style="background:rgba(239,68,68,0.2);">🔴</div>
+        <div>
+          <div class="inact-period">6 a 12 meses sem comprar</div>
+          <div class="inact-action">Visita presencial ou proposta comercial diferenciada</div>
+        </div>
+      </div>
+      <div class="inact-row">
+        <div class="inact-badge" style="background:rgba(100,100,100,0.3);">⚫</div>
+        <div>
+          <div class="inact-period">Mais de 12 meses sem comprar</div>
+          <div class="inact-action">Análise de perfil + última tentativa de recuperação</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SLIDE 7 — FATURAMENTO ===== -->
+  <div class="slide" id="slide-7">
+    <div class="slide-title">💰 Faturamento — Acompanhe Seus Números</div>
+    <div class="slide-subtitle">3 visões essenciais para monitorar sua performance comercial</div>
+
+    <div class="fat-cards">
+      <div class="fat-card green">
+        <div class="fat-icon">📈</div>
+        <div class="fat-card-title">Faturamento Mês Atual</div>
+        <div class="fat-card-desc">Quanto você faturou neste mês, atualizado conforme os pedidos são processados.</div>
+        <div style="background:rgba(16,185,129,0.15);border-radius:10px;padding:10px 14px;margin-bottom:10px;">
+          <div style="font-size:24px;font-weight:800;color:var(--green);">R$ 84.320</div>
+          <div style="font-size:10px;color:var(--muted);">exemplo de valor</div>
+        </div>
+        <div class="fat-card-hint">🔍 Clique para ver cliente por cliente</div>
+      </div>
+
+      <div class="fat-card purple">
+        <div class="fat-icon">🎯</div>
+        <div class="fat-card-title">Meta vs Realizado</div>
+        <div class="fat-card-desc">Seu progresso em relação à meta mensal.</div>
+
+        <!-- Gauge SVG -->
+        <div class="gauge-wrapper">
+          <svg class="gauge-svg" width="130" height="80" viewBox="0 0 130 80">
+            <defs>
+              <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#8b5cf6"/>
+                <stop offset="100%" stop-color="#3b82f6"/>
+              </linearGradient>
+            </defs>
+            <!-- Track de fundo (semicírculo) -->
+            <path d="M 15 75 A 50 50 0 0 1 115 75" fill="none" class="gauge-bg"/>
+            <!-- Fill animado -->
+            <path d="M 15 75 A 50 50 0 0 1 115 75" fill="none" class="gauge-fill" id="gauge-fill-7"/>
+            <!-- Texto central -->
+            <text x="65" y="68" class="gauge-num" id="gauge-num-7" style="font-family:system-ui;">0</text>
+            <text x="65" y="80" class="gauge-pct" style="font-family:system-ui;">% da meta</text>
+          </svg>
+          <div class="gauge-labels"><span>0%</span><span>100%</span></div>
+        </div>
+        <div class="fat-card-hint">💡 Fique acima de 70% até a 3ª semana</div>
+      </div>
+
+      <div class="fat-card orange">
+        <div class="fat-icon">🎁</div>
+        <div class="fat-card-title">Bonificações</div>
+        <div class="fat-card-desc">Valor bonificado e percentual sobre faturamento.</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <div style="flex:1;background:rgba(249,115,22,0.15);border-radius:10px;padding:8px;text-align:center;">
+            <div style="font-size:16px;font-weight:800;color:var(--orange);">R$ 3.200</div>
+            <div style="font-size:10px;color:var(--muted);">valor bonif.</div>
+          </div>
+          <div style="flex:1;background:rgba(249,115,22,0.15);border-radius:10px;padding:8px;text-align:center;">
+            <div style="font-size:16px;font-weight:800;color:var(--orange);">3,8%</div>
+            <div style="font-size:10px;color:var(--muted);">do faturado</div>
+          </div>
+        </div>
+        <div class="fat-card-hint">🔍 Ver bonificação por cliente</div>
+      </div>
+    </div>
+
+    <!-- Fluxo de clique -->
+    <div class="click-flow">
+      <div class="cf-title">🖱 Fluxo de clique — do card até o cliente individual</div>
+      <div class="cf-steps">
+        <div class="cf-step" id="cf-1" style="border-color:rgba(16,185,129,0.4);color:#6ee7b7;">💰 Faturamento Mês Atual</div>
+        <div class="cf-arrow">→</div>
+        <div class="cf-step" id="cf-2" style="border-color:rgba(139,92,246,0.4);color:#c4b5fd;">👥 Lista de Representantes</div>
+        <div class="cf-arrow">→</div>
+        <div class="cf-step" id="cf-3" style="border-color:rgba(59,130,246,0.4);color:#93c5fd;">"Ver clientes →"</div>
+        <div class="cf-arrow">→</div>
+        <div class="cf-step" id="cf-4" style="border-color:rgba(245,158,11,0.4);color:var(--yellow);">🏪 Fat + Bonif por cliente</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SLIDE 8 — COMO NAVEGAR + FILTROS ===== -->
+  <div class="slide" id="slide-8">
+    <div class="slide-title">🖱 Como Navegar — Clique e Explore</div>
+    <div class="slide-subtitle">O dashboard é interativo — cada clique revela mais detalhes</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;width:100%;max-width:860px;">
+      <!-- Fluxo de navegação -->
+      <div class="nav-flow" style="max-width:100%;">
+        <div class="flow-block" style="border-color:rgba(16,185,129,0.5);background:rgba(16,185,129,0.07);">
+          <div class="fb-label" style="color:var(--green);">PASSO 1</div>
+          <div class="fb-title">💰 Card de Faturamento</div>
+          <div class="fb-desc">Clique em qualquer card de faturamento</div>
+        </div>
+        <div style="height:32px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+          <div class="flow-arrow-label">clica ↓</div>
+        </div>
+
+        <div class="flow-block" style="border-color:rgba(139,92,246,0.5);background:rgba(139,92,246,0.07);">
+          <div class="fb-label" style="color:var(--purple);">PASSO 2</div>
+          <div class="fb-title">👤 Lista de Representantes</div>
+          <div class="fb-desc">Faturamento, bonificação e % de cada rep</div>
+        </div>
+        <div style="height:32px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+          <div class="flow-arrow-label">"Ver clientes →" ↓</div>
+        </div>
+
+        <div class="flow-block" style="border-color:rgba(59,130,246,0.5);background:rgba(59,130,246,0.07);">
+          <div class="fb-label" style="color:var(--blue);">PASSO 3</div>
+          <div class="fb-title">🏪 Lista de Clientes</div>
+          <div class="fb-desc">Faturamento e bonificação por cliente</div>
+        </div>
+        <div style="height:32px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+          <div class="flow-arrow-label">ícone 📈 ↓</div>
+        </div>
+
+        <div class="flow-block" style="border-color:rgba(245,158,11,0.5);background:rgba(245,158,11,0.07);">
+          <div class="fb-label" style="color:var(--yellow);">PASSO 4</div>
+          <div class="fb-title">📊 Histórico do Cliente</div>
+          <div class="fb-desc">Gráfico completo + tendências ao longo do tempo</div>
+        </div>
+      </div>
+
+      <!-- Filtro de mês -->
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;">⚙️ Filtro de Período</div>
+
+        <div class="month-filter-mockup">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Mês de referência:</div>
+          <div class="mfm-select">
+            <span>📅</span>
+            <span style="flex:1;">Maio / 2026</span>
+            <span style="color:var(--muted);">▼</span>
+          </div>
+          <div class="mfm-hint">
+            <div class="mfm-hint-row">↑ Mude aqui para ver qualquer mês passado</div>
+            <div class="mfm-hint-row">↑ Todos os cards atualizam automaticamente</div>
+          </div>
+        </div>
+
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-top:14px;">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">💡 O que você pode fazer</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+              <span>📅</span> <span>Comparar este mês com o anterior</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+              <span>🔍</span> <span>Ver clientes que compraram há 6 meses</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+              <span>📈</span> <span>Analisar tendência ao longo do tempo</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+              <span>🎯</span> <span>Checar sua meta em qualquer período</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SLIDE 9 — ROTINA SEMANAL ===== -->
+  <div class="slide" id="slide-9">
+    <div class="slide-title">📆 Rotina Semanal no Dashboard</div>
+    <div class="slide-subtitle">O que checar em cada dia da semana — 15 minutos por dia são suficientes</div>
+
+    <div class="weekly-cols">
+      <!-- Segunda -->
+      <div class="weekly-col">
+        <div class="wc-day mon">SEGUNDA</div>
+        <div class="wc-items">
+          <div class="wc-item">
+            <div class="wc-icon">🔥</div>
+            <div>
+              <div style="font-weight:700;">Clientes Quentes</div>
+              <div style="font-size:10px;color:var(--muted);">Ligue para os da janela</div>
+            </div>
+          </div>
+          <div class="wc-item">
+            <div class="wc-icon">🔴</div>
+            <div>
+              <div style="font-weight:700;">Inativos</div>
+              <div style="font-size:10px;color:var(--muted);">Priorize os mais recentes</div>
+            </div>
+          </div>
+          <div class="wc-item">
+            <div class="wc-icon">🗓</div>
+            <div>
+              <div style="font-weight:700;">Planeje a semana</div>
+              <div style="font-size:10px;color:var(--muted);">Organize sua agenda</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quarta -->
+      <div class="weekly-col">
+        <div class="wc-day wed">QUARTA</div>
+        <div class="wc-items">
+          <div class="wc-item">
+            <div class="wc-icon">📦</div>
+            <div>
+              <div style="font-weight:700;">&lt; 30 SKUs</div>
+              <div style="font-size:10px;color:var(--muted);">Apresente novos produtos</div>
+            </div>
+          </div>
+          <div class="wc-item">
+            <div class="wc-icon">📞</div>
+            <div>
+              <div style="font-weight:700;">Follow-ups pendentes</div>
+              <div style="font-size:10px;color:var(--muted);">Retorne quem não comprou</div>
+            </div>
+          </div>
+          <div class="wc-item">
+            <div class="wc-icon">⚠️</div>
+            <div>
+              <div style="font-weight:700;">Ciclo aumentando</div>
+              <div style="font-size:10px;color:var(--muted);">Investigue os sinais</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sexta -->
+      <div class="weekly-col">
+        <div class="wc-day fri">SEXTA</div>
+        <div class="wc-items">
+          <div class="wc-item">
+            <div class="wc-icon">💰</div>
+            <div>
+              <div style="font-weight:700;">Cheque a Meta</div>
+              <div style="font-size:10px;color:var(--muted);">Onde você está?</div>
+            </div>
+          </div>
+          <div class="wc-item">
+            <div class="wc-icon">🎯</div>
+            <div>
+              <div style="font-weight:700;">Bonificações</div>
+              <div style="font-size:10px;color:var(--muted);">Quanto está bonificando?</div>
+            </div>
+          </div>
+          <div class="wc-item">
+            <div class="wc-icon">📊</div>
+            <div>
+              <div style="font-weight:700;">Balanço da semana</div>
+              <div style="font-size:10px;color:var(--muted);">Planeje as ações de segunda</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="weekly-motto">
+      ⏱ 15 minutos por dia no dashboard = carteira sempre ativa
+    </div>
+  </div>
+
+  <!-- ===== SLIDE 10 — ONDE FOCAR (MATRIZ) ===== -->
+  <div class="slide" id="slide-10">
+    <div class="slide-title">🎯 Onde Depositar Sua Energia</div>
+    <div class="slide-subtitle">Use essa matriz para priorizar suas ações diárias</div>
+
+    <div class="matrix-wrapper">
+      <div class="matrix-axes">
+        <div class="matrix-y-label">IMPACTO</div>
+        <div>
+          <div class="matrix-grid">
+            <div class="matrix-cell highlight">
+              <div class="mc-label" style="color:var(--yellow);">⚡ URGENTE + ALTO IMPACTO</div>
+              <div class="mc-items">
+                <div class="mc-item">🔥 Clientes Quentes</div>
+                <div class="mc-item">🔴 Inativos 90+ dias</div>
+              </div>
+              <div class="mc-nums">🔥 89 quentes · 190 inativos</div>
+            </div>
+            <div class="matrix-cell">
+              <div class="mc-label" style="color:var(--blue);">📌 ALTO IMPACTO</div>
+              <div class="mc-items">
+                <div class="mc-item">📦 &lt; 30 SKUs</div>
+                <div class="mc-item">💰 Acompanhar Meta</div>
+              </div>
+              <div class="mc-nums">🔵 189 clientes &lt; 30 SKUs</div>
+            </div>
+            <div class="matrix-cell">
+              <div class="mc-label" style="color:var(--orange);">⚠ URGENTE</div>
+              <div class="mc-items">
+                <div class="mc-item">⚠ Ciclo Aumentando</div>
+                <div class="mc-item">▼ SKU Diminuindo</div>
+              </div>
+              <div class="mc-nums">⚠ 64 ciclo aumentado · 132 SKU↓</div>
+            </div>
+            <div class="matrix-cell">
+              <div class="mc-label" style="color:var(--muted);">📊 PLANEJAMENTO</div>
+              <div class="mc-items">
+                <div class="mc-item">📊 Ver Histórico</div>
+                <div class="mc-item">📈 Analisar Tendência</div>
+              </div>
+              <div class="mc-nums">Histórico & tendências</div>
+            </div>
+          </div>
+          <div class="matrix-x-labels">
+            <div style="width:12px;"></div>
+            <div class="mx-label">URGENTE</div>
+            <div class="mx-label">NÃO URGENTE</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="matrix-footer">
+        ⭐ Comece sempre pelo quadrante URGENTE + ALTO IMPACTO — é onde está seu maior retorno
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SLIDE 11 — OBJETIVO ===== -->
+  <div class="slide" id="slide-11">
+    <div class="main-phrase">"Transformar dados em ação comercial."</div>
+
+    <!-- Resumo 3 números -->
+    <div class="three-nums">
+      <div class="three-num-card">
+        <div class="tn-num orange" data-count="89">0</div>
+        <div class="tn-label">Oportunidades</div>
+        <div class="tn-sub">esta semana</div>
+      </div>
+      <div class="three-num-card">
+        <div class="tn-num red" data-count="190">0</div>
+        <div class="tn-label">Recuperar</div>
+        <div class="tn-sub">urgente</div>
+      </div>
+      <div class="three-num-card">
+        <div class="tn-num blue" data-count="189">0</div>
+        <div class="tn-label">Cross-sell</div>
+        <div class="tn-sub">potencial</div>
+      </div>
+    </div>
+
+    <div class="pillars">
+      <div class="pillar">
+        <div class="p-icon">🔍</div>
+        <div class="p-name">Ver</div>
+        <div class="p-desc">Identifique quem precisa de atenção antes que seja tarde demais</div>
+      </div>
+      <div class="pillar">
+        <div class="p-icon">📞</div>
+        <div class="p-name">Agir</div>
+        <div class="p-desc">Entre em contato no momento exato em que o cliente está pronto para comprar</div>
+      </div>
+      <div class="pillar">
+        <div class="p-icon">📈</div>
+        <div class="p-name">Crescer</div>
+        <div class="p-desc">Aumente ticket médio, mix de produtos e frequência de compra</div>
+      </div>
+    </div>
+
+    <div class="cycle-wrapper">
+      <div class="cycle-item">📊 Dados</div>
+      <div class="cycle-arrow">→</div>
+      <div class="cycle-item">💡 Insight</div>
+      <div class="cycle-arrow">→</div>
+      <div class="cycle-item">📞 Ação</div>
+      <div class="cycle-arrow">→</div>
+      <div class="cycle-item">🏆 Resultado</div>
+      <div class="cycle-arrow">→</div>
+      <div class="cycle-item" style="color:var(--yellow);">📊 Dados</div>
+    </div>
+
+    <div class="footer-note">
+      Seu dashboard atualiza automaticamente quando os dados mudam.<br>
+      <strong style="color:var(--yellow);">Use-o toda semana para manter sua carteira sempre ativa.</strong>
+    </div>
+
+    <button class="btn-secondary" onclick="goToSlide(1)">← Rever o guia</button>
+  </div>
+
+</div><!-- /slides-wrapper -->
+
+<!-- NAVIGATION BAR -->
+<div id="nav-bar">
+  <button class="nav-btn" id="btn-prev" onclick="prevSlide()">←</button>
+  <div id="slide-dots"></div>
+  <span id="slide-counter">1 / 11</span>
+  <button class="nav-btn" id="btn-next" onclick="nextSlide()">→</button>
+</div>
+
+<script>
+  const TOTAL = 11;
+  let current = 1;
+
+  // Build dots
+  const dotsEl = document.getElementById('slide-dots');
+  for (let i = 1; i <= TOTAL; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 1 ? ' active' : '');
+    d.onclick = () => goToSlide(i);
+    dotsEl.appendChild(d);
+  }
+
+  // ---- Contador animado ----
+  function animateCount(el) {
+    const target = parseInt(el.dataset.count);
+    let startTime = null;
+    const dur = 800;
+    const step = timestamp => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / dur, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.floor(ease * target);
+      if (progress < 1) requestAnimationFrame(step);
+      else el.textContent = target;
+    };
+    requestAnimationFrame(step);
+  }
+
+  function triggerSlideAnimations(n) {
+    const slide = document.getElementById('slide-' + n);
+    if (!slide) return;
+
+    // Contadores data-count
+    slide.querySelectorAll('[data-count]').forEach(el => {
+      el.textContent = '0';
+      setTimeout(() => animateCount(el), 300);
+    });
+
+    // Gauge no slide 7
+    if (n === 7) {
+      setTimeout(() => {
+        const fill = document.getElementById('gauge-fill-7');
+        const numEl = document.getElementById('gauge-num-7');
+        if (fill) fill.classList.add('animate');
+        if (numEl) {
+          let startTime = null;
+          const dur = 1500;
+          const target = 87;
+          const step = ts => {
+            if (!startTime) startTime = ts;
+            const p = Math.min((ts - startTime) / dur, 1);
+            const ease = 1 - Math.pow(1 - p, 3);
+            numEl.textContent = Math.floor(ease * target);
+            if (p < 1) requestAnimationFrame(step);
+            else numEl.textContent = target;
+          };
+          requestAnimationFrame(step);
+        }
+      }, 400);
+
+      // Fluxo de clique sequencial
+      const steps = ['cf-1','cf-2','cf-3','cf-4'];
+      steps.forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.classList.remove('show');
+          setTimeout(() => el.classList.add('show'), 400 + i * 250);
+        }
+      });
+    }
+
+    // Typing animation no slide 2 — reinicia quando volta ao slide
+    if (n === 2) {
+      const typing = document.querySelector('.typing-text');
+      if (typing) {
+        typing.style.animation = 'none';
+        typing.style.width = '0';
+        typing.offsetHeight; // reflow
+        typing.style.animation = '';
+      }
+    }
+  }
+
+  function goToSlide(n) {
+    if (n < 1 || n > TOTAL) return;
+
+    const prev = document.getElementById('slide-' + current);
+    const next = document.getElementById('slide-' + n);
+
+    prev.classList.remove('active');
+    prev.classList.add('exit-left');
+    setTimeout(() => prev.classList.remove('exit-left'), 400);
+
+    next.classList.add('active');
+
+    current = n;
+    updateUI();
+    triggerSlideAnimations(n);
+  }
+
+  function updateUI() {
+    document.getElementById('progress-bar').style.width = ((current / TOTAL) * 100) + '%';
+    document.getElementById('slide-counter').textContent = current + ' / ' + TOTAL;
+    document.getElementById('btn-prev').disabled = current === 1;
+    document.getElementById('btn-next').disabled = current === TOTAL;
+    document.querySelectorAll('.dot').forEach((d, i) => {
+      d.classList.toggle('active', i + 1 === current);
+    });
+  }
+
+  function nextSlide() { goToSlide(current + 1); }
+  function prevSlide() { goToSlide(current - 1); }
+
+  // Keyboard
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextSlide();
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') prevSlide();
+  });
+
+  // Touch swipe
+  let touchX = 0;
+  document.addEventListener('touchstart', e => { touchX = e.touches[0].clientX; });
+  document.addEventListener('touchend', e => {
+    const dx = touchX - e.changedTouches[0].clientX;
+    if (Math.abs(dx) > 50) {
+      if (dx > 0) nextSlide();
+      else prevSlide();
+    }
+  });
+
+  // Init — trigger animations for slide 1 (sem contadores, só garante estado)
+  updateUI();
+</script>
+</body>
+</html>
