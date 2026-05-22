@@ -25,13 +25,16 @@ if (bonifFile) {
   console.log('Bonif enviado:', bonifFile);
 }
 
+// Upload do dashboard atualizado para o Google Drive
+rclone('copy "./dashboard_hanova.html" "gdrive:aplicativos claude/"');
+console.log('Dashboard enviado ao Drive: aplicativos claude/dashboard_hanova.html');
+
 // Remover arquivos de entrada processados do Drive
 const arquivosEntrada = fs.existsSync(ENTRADA)
   ? fs.readdirSync(ENTRADA).filter(f => (f.endsWith('.xlsx') || f.endsWith('.xls')) && !f.startsWith('~'))
   : [];
 
 for (const f of arquivosEntrada) {
-  // Se foi processado (arquivo local foi deletado), apagar do Drive também
   if (!fs.existsSync(ENTRADA + '/' + f)) {
     rclone('deletefile "gdrive:dados relatorios/entrada/' + f + '"');
     console.log('Removido do Drive entrada:', f);
