@@ -2117,6 +2117,8 @@ function exportModalXLSX() {
   // Para cada coluna, detectar se tem rawKey expl\u00edcito ou _chave autom\u00e1tica
   var data = _modalRows.map(function(r){
     return cols.map(function(c){
+      // colunas marcadas como noRawExcel: usar valor display diretamente
+      if (c.noRawExcel) { var vd = r[c.key]; return (vd===undefined||vd===null)?'':vd; }
       // rawKey expl\u00edcito (ex: rawKey:'_meta')
       if (c.rawKey !== undefined && typeof r[c.rawKey] === 'number') return r[c.rawKey];
       // tentativa autom\u00e1tica: _colKey (ex: col.key='valor' \u2192 r._valor)
@@ -2860,7 +2862,7 @@ const COLS_FAT_BONIF_CLI = [
   {key:'fat',          label:'Faturamento',   rawKey:'_fat'},
   {key:'meta',         label:'Meta',          rawKey:'_meta'},
   {key:'pctMeta',      label:'% Meta',        rawKey:'_pctMeta'},
-  {key:'ultCompra',    label:'Últ. Compra',   rawKey:'_ultCompra'},
+  {key:'ultCompra',    label:'Últ. Compra',   rawKey:'_ultCompra', noRawExcel:true},
   {key:'diasSemCompra',label:'Dias s/ Compra',rawKey:'_diasSemCompra'},
   {key:'bonif',        label:'Bonificação',   rawKey:'_bonif'},
   {key:'pctBonif',     label:'% Bonif/Fat',   rawKey:'_pctBonifRaw'}
@@ -2980,7 +2982,7 @@ function _metaCliDrill(nvEnc) {
     {key:'meta',         label:'Meta',            rawKey:'_meta'},
     {key:'realizado',    label:'Realizado Mês',   rawKey:'_real'},
     {key:'pct',          label:'% Atingido',      rawKey:'_pct'},
-    {key:'ultCompra',    label:'Últ. Compra',     rawKey:'_ultCompra'},
+    {key:'ultCompra',    label:'Últ. Compra',     rawKey:'_ultCompra', noRawExcel:true},
     {key:'diasSemCompra',label:'Dias s/ Compra',  rawKey:'_diasSemCompra'}
   ];
   showModal('Meta — '+nomevend, lista, COLS_META_CLI);
