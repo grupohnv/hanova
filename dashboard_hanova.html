@@ -2836,9 +2836,10 @@ let _fatBonifDrill = null;
 const COLS_FAT_BONIF_CLI = [
   {key:'nomecli',   label:'Cliente'},
   {key:'codcli',    label:'Código'},
-  {key:'nomevend',  label:'Representante'},
   {label:'', render:function(r){return '<button class="btn-sku-falt" title="Ver histórico" onclick="showClienteHistorico(\''+String(r.codcli).replace(/'/g,"\\'")+'\')" >&#128200;</button>';}},
   {key:'fat',       label:'Faturamento',   rawKey:'_fat'},
+  {key:'meta',      label:'Meta',          rawKey:'_meta'},
+  {key:'pctMeta',   label:'% Meta',        rawKey:'_pctMeta'},
   {key:'bonif',     label:'Bonificação',   rawKey:'_bonif'},
   {key:'pctBonif',  label:'% Bonif/Fat',   rawKey:'_pctBonifRaw'}
 ];
@@ -2873,19 +2874,49 @@ function _showFatBonif(label, am) {
     repMap[v]._bonif+=cli._bonif;
     repMap[v].lista.push(cli);
   });
+  // Mapa de meta por representante (de currentKpis.metaCli.lRep)
+  const metaRepMap = {};
+  if (currentKpis.metaCli && currentKpis.metaCli.lRep) {
+    currentKpis.metaCli.lRep.forEach(r => { metaRepMap[(r.nomevend||'').toUpperCase()] = r._meta || 0; });
+  }
+  // Mapa de meta por cliente (de currentKpis.metaCli.lCli)
+  const metaCliMap = {};
+  if (currentKpis.metaCli && currentKpis.metaCli.lCli) {
+    currentKpis.metaCli.lCli.forEach(r => { metaCliMap[String(r.codcli)] = r._meta || 0; });
+  }
+
   const repLista = Object.values(repMap).map(r=>({
     ...r,
     clientes:r.lista.length,
     fat:fmtBRL(r._fat), bonif:fmtBRL(r._bonif),
     pctBonif: r._fat>0 ? (r._bonif/r._fat*100).toFixed(1)+'%' : '—',
-    _pctBonifRaw: r._fat>0 ? r._bonif/r._fat*100 : 0
+    _pctBonifRaw: r._fat>0 ? r._bonif/r._fat*100 : 0,
+    _meta: metaRepMap[(r.nomevend||'').toUpperCase()] || 0,
+    meta: metaRepMap[(r.nomevend||'').toUpperCase()] > 0 ? fmtBRL(metaRepMap[(r.nomevend||'').toUpperCase()]) : '—',
+    _pctMeta: metaRepMap[(r.nomevend||'').toUpperCase()] > 0 ? r._fat / metaRepMap[(r.nomevend||'').toUpperCase()] * 100 : 0,
+    pctMeta: metaRepMap[(r.nomevend||'').toUpperCase()] > 0 ? (r._fat / metaRepMap[(r.nomevend||'').toUpperCase()] * 100).toFixed(1)+'%' : '—'
   })).sort((a,b)=>b._fat-a._fat);
+
+  // Adicionar meta nas listas de clientes
+  repLista.forEach(rep => {
+    rep.lista = rep.lista.map(cli => {
+      const m = metaCliMap[String(cli.codcli)] || 0;
+      return { ...cli,
+        _meta: m,
+        meta: m > 0 ? fmtBRL(m) : '—',
+        _pctMeta: m > 0 ? cli._fat / m * 100 : 0,
+        pctMeta: m > 0 ? (cli._fat / m * 100).toFixed(1)+'%' : '—'
+      };
+    });
+  });
 
   _fatBonifDrill = {title, repLista};
   const COLS_REP = [
     {key:'nomevend',  label:'Representante'},
     {key:'clientes',  label:'Clientes'},
     {key:'fat',       label:'Faturamento',   rawKey:'_fat'},
+    {key:'meta',      label:'Meta',          rawKey:'_meta'},
+    {key:'pctMeta',   label:'% Meta',        rawKey:'_pctMeta'},
     {key:'bonif',     label:'Bonificação',   rawKey:'_bonif'},
     {key:'pctBonif',  label:'% Bonif/Fat',   rawKey:'_pctBonifRaw'},
     {label:'Detalhe', render:(_,i)=>`<button class="btn-ver-cli" onclick="_fatBonifDrillClients(${i})">Ver clientes →</button>`}
