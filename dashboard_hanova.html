@@ -1130,7 +1130,7 @@ function calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps) {
     lCli.push({ nomecli, codcli, nomevend, _meta:metaVal, meta:fmtBRL(metaVal), _real:real, realizado:fmtBRL(real),
       _ticketMed:_ticketMedCalc(cli), ticketMedio:fmtBRL(_ticketMedCalc(cli)), pct:pct+'%', _pct:pct, _semMeta:false,
       _ultCompra: _uc ? _uc.getTime() : 0,
-      ultCompra: _uc && _uc.getTime()>0 ? _uc.toLocaleDateString('pt-BR') : '—',
+      ultCompra: _uc && _uc.getTime()>0 ? String(_uc.getMonth()+1).padStart(2,'0')+'/'+_uc.getFullYear() : '—',
       _diasSemCompra: _dc !== null ? _dc : 9999,
       diasSemCompra: _dc !== null ? _dc+'d' : '—' });
     _addRep(nomevend, metaVal, real);
@@ -1147,7 +1147,7 @@ function calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps) {
     lCli.push({ nomecli:cli.nomecli||codcli, codcli, nomevend, _meta:0, meta:'—', _real:real, realizado:fmtBRL(real),
       _ticketMed:_ticketMedCalc(cli), ticketMedio:fmtBRL(_ticketMedCalc(cli)), pct:'—', _pct:0, _semMeta:true,
       _ultCompra: _uc2 ? _uc2.getTime() : 0,
-      ultCompra: _uc2 && _uc2.getTime()>0 ? _uc2.toLocaleDateString('pt-BR') : '—',
+      ultCompra: _uc2 && _uc2.getTime()>0 ? String(_uc2.getMonth()+1).padStart(2,'0')+'/'+_uc2.getFullYear() : '—',
       _diasSemCompra: _dc2 !== null ? _dc2 : 9999,
       diasSemCompra: _dc2 !== null ? _dc2+'d' : '—' });
     _addRep(nomevend, 0, real);
@@ -2895,7 +2895,7 @@ function _showFatBonif(label, am) {
       pctBonif: x._fat>0 ? (x._bonif/x._fat*100).toFixed(1)+'%' : '—',
       _pctBonifRaw: x._fat>0 ? x._bonif/x._fat*100 : 0,
       _ultCompra: uc ? uc.getTime() : 0,
-      ultCompra: uc ? uc.toLocaleDateString('pt-BR') : '—',
+      ultCompra: uc ? String(uc.getMonth()+1).padStart(2,'0')+'/'+uc.getFullYear() : '—',
       _diasSemCompra: dc !== null ? dc : 9999,
       diasSemCompra: dc !== null ? dc+'d' : '—'
     };
