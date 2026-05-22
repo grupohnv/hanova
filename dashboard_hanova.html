@@ -386,6 +386,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
         <div class="cs" id="kFatAtualSub"></div>
         <div id="kFatAtualBadge"></div>
         <div class="cs" id="kFatAtualBonif" style="margin-top:6px;font-size:0.78rem;color:#f59e0b;display:none"></div>
+        <div class="cs" id="kFatAtualMeta" style="margin-top:4px;font-size:0.78rem;color:#a78bfa;display:none"></div>
       </div>
       <div class="card kpi-card kgr" style="padding:12px 14px">
         <div class="ct">Faturamento Mês Anterior</div>
@@ -1089,40 +1090,58 @@ function computeKPIs(base, mesRef, meta, allowedReps, bonif) {
 }
 
 function calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps) {
-  if (!metaMap.size) return { totalMeta:0, totalReal:0, pct:0, lCli:[], lRep:[] };
   const lCli = [], repMap = new Map();
+
+  function _ticketMedCalc(cli) {
+    if (!cli) return 0;
+    const rowsPos = cli.rows.filter(r=>r.valor>0);
+    const amsDesc = [...new Set(rowsPos.map(r=>r._anomes).filter(Boolean))].sort((a,b)=>b-a);
+    const ult3 = amsDesc.slice(0,3);
+    if (!ult3.length) return 0;
+    return ult3.reduce((s,am)=>s+rowsPos.filter(r=>r._anomes===am).reduce((ss,r)=>ss+r.valor,0),0) / ult3.length;
+  }
+
+  function _addRep(nomevend, metaVal, real) {
+    if (!repMap.has(nomevend)) repMap.set(nomevend, {nomevend, _meta:0, _real:0});
+    repMap.get(nomevend)._meta += metaVal;
+    repMap.get(nomevend)._real += real;
+  }
+
+  // 1. Clientes COM meta definida
   metaMap.forEach((metaVal, codcli) => {
     const cli = clienteMap.get(codcli);
     const cad = !cli ? (cadastroMap.get(codcli)||null) : null;
     const nomecli  = cli ? (cli.nomecli||codcli) : (cad ? (cad.nomecli||codcli) : codcli);
     const nomevend = cli ? (cli.nomevend||'N/D') : (cad ? (cad.nomevend||'N/D') : 'N/D');
-    // Filtro por representante: se allowedReps definido, só inclui clientes desse rep
     if (allowedReps && !allowedReps.has((nomevend||'').toUpperCase())) return;
-    const real    = cli ? cli.rows.filter(r=>r._anomes===refAM).reduce((s,r)=>s+r.valor,0) : 0;
-    const totalFat= cli ? cli.rows.reduce((s,r)=>s+r.valor,0) : 0;
-    // Ticket médio: média dos 3 últimos pedidos (anomes) com valor > 0
-    let _ticketMed = 0;
-    if (cli) {
-      const rowsPos = cli.rows.filter(r=>r.valor>0);
-      const amsDesc = [...new Set(rowsPos.map(r=>r._anomes).filter(Boolean))].sort((a,b)=>b-a);
-      const ult3 = amsDesc.slice(0,3);
-      if (ult3.length>0) {
-        const soma3 = ult3.reduce((s,am)=>s+rowsPos.filter(r=>r._anomes===am).reduce((ss,r)=>ss+r.valor,0),0);
-        _ticketMed = soma3 / ult3.length;
-      }
-    }
-    const pct     = metaVal > 0 ? +(real/metaVal*100).toFixed(1) : 0;
-    lCli.push({ nomecli, codcli, nomevend, _meta:metaVal, meta:fmtBRL(metaVal), _real:real, realizado:fmtBRL(real), _ticketMed, ticketMedio:fmtBRL(_ticketMed), pct:pct+'%', _pct:pct });
-    if (!repMap.has(nomevend)) repMap.set(nomevend, {nomevend, _meta:0, _real:0});
-    repMap.get(nomevend)._meta += metaVal;
-    repMap.get(nomevend)._real += real;
+    const real = cli ? cli.rows.filter(r=>r._anomes===refAM).reduce((s,r)=>s+r.valor,0) : 0;
+    const pct  = metaVal > 0 ? +(real/metaVal*100).toFixed(1) : 0;
+    lCli.push({ nomecli, codcli, nomevend, _meta:metaVal, meta:fmtBRL(metaVal), _real:real, realizado:fmtBRL(real),
+      _ticketMed:_ticketMedCalc(cli), ticketMedio:fmtBRL(_ticketMedCalc(cli)), pct:pct+'%', _pct:pct, _semMeta:false });
+    _addRep(nomevend, metaVal, real);
   });
-  lCli.sort((a,b)=>b._meta-a._meta);
+
+  // 2. Clientes SEM meta mas com pedido > 0 no mês de referência
+  clienteMap.forEach((cli, codcli) => {
+    if (metaMap.has(codcli)) return; // já incluído acima
+    const real = cli.rows.filter(r=>r._anomes===refAM).reduce((s,r)=>s+r.valor,0);
+    if (real <= 0) return; // sem pedido no mês, não inclui
+    const nomevend = cli.nomevend||'N/D';
+    if (allowedReps && !allowedReps.has((nomevend||'').toUpperCase())) return;
+    lCli.push({ nomecli:cli.nomecli||codcli, codcli, nomevend, _meta:0, meta:'—', _real:real, realizado:fmtBRL(real),
+      _ticketMed:_ticketMedCalc(cli), ticketMedio:fmtBRL(_ticketMedCalc(cli)), pct:'—', _pct:0, _semMeta:true });
+    _addRep(nomevend, 0, real);
+  });
+
+  // Ordenar: com meta primeiro (por meta desc), depois sem meta (por realizado desc)
+  lCli.sort((a,b)=> a._semMeta !== b._semMeta ? (a._semMeta?1:-1) : (a._semMeta ? b._real-a._real : b._meta-a._meta));
+
   const lRep = [...repMap.values()].map(r=>({...r,
     meta:fmtBRL(r._meta), realizado:fmtBRL(r._real),
     pct: r._meta>0 ? (r._real/r._meta*100).toFixed(1)+'%' : '—',
     _pct: r._meta>0 ? r._real/r._meta*100 : 0
   })).sort((a,b)=>b._meta-a._meta);
+
   const totalMeta = lCli.reduce((s,r)=>s+r._meta,0);
   const totalReal = lCli.reduce((s,r)=>s+r._real,0);
   const pct = totalMeta>0 ? +(totalReal/totalMeta*100).toFixed(1) : 0;
@@ -1507,6 +1526,20 @@ function updateDOM(k, mesRef, repLabel) {
       el.textContent = k.bonifAtual > 0
         ? `🎁 Bonif: ${fmtBRL(k.bonifAtual)} (${k.bonifPctFat}%)`
         : '🎁 Bonif: Sem dados neste mês';
+    }
+  }
+
+  { // meta no card faturamento atual
+    const el = document.getElementById('kFatAtualMeta');
+    if (el) {
+      const _metaArqF = k.metaCli && k.metaCli.totalMeta > 0;
+      if (_metaArqF) {
+        const pctFat = (k.fatAtual / k.metaCli.totalMeta * 100).toFixed(1);
+        el.style.display = '';
+        el.textContent = `🎯 Meta: ${fmtBRL(k.metaCli.totalMeta)} · ${pctFat}% atingido`;
+      } else {
+        el.style.display = 'none';
+      }
     }
   }
 
