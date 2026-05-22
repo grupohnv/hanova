@@ -1101,6 +1101,16 @@ function calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps) {
     return ult3.reduce((s,am)=>s+rowsPos.filter(r=>r._anomes===am).reduce((ss,r)=>ss+r.valor,0),0) / ult3.length;
   }
 
+  const _hoje = new Date();
+  function _ultCompraCalc(cli) {
+    if (!cli || !cli.rows.length) return null;
+    return cli.rows.reduce((d,r) => (r._data && r._data > d ? r._data : d), new Date(0));
+  }
+  function _diasCalc(dt) {
+    if (!dt || dt.getTime()===0) return null;
+    return Math.round((_hoje - dt) / 86400000);
+  }
+
   function _addRep(nomevend, metaVal, real) {
     if (!repMap.has(nomevend)) repMap.set(nomevend, {nomevend, _meta:0, _real:0});
     repMap.get(nomevend)._meta += metaVal;
@@ -1116,8 +1126,13 @@ function calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps) {
     if (allowedReps && !allowedReps.has((nomevend||'').toUpperCase())) return;
     const real = cli ? cli.rows.filter(r=>r._anomes===refAM).reduce((s,r)=>s+r.valor,0) : 0;
     const pct  = metaVal > 0 ? +(real/metaVal*100).toFixed(1) : 0;
+    const _uc = _ultCompraCalc(cli); const _dc = _diasCalc(_uc);
     lCli.push({ nomecli, codcli, nomevend, _meta:metaVal, meta:fmtBRL(metaVal), _real:real, realizado:fmtBRL(real),
-      _ticketMed:_ticketMedCalc(cli), ticketMedio:fmtBRL(_ticketMedCalc(cli)), pct:pct+'%', _pct:pct, _semMeta:false });
+      _ticketMed:_ticketMedCalc(cli), ticketMedio:fmtBRL(_ticketMedCalc(cli)), pct:pct+'%', _pct:pct, _semMeta:false,
+      _ultCompra: _uc ? _uc.getTime() : 0,
+      ultCompra: _uc && _uc.getTime()>0 ? _uc.toLocaleDateString('pt-BR') : '—',
+      _diasSemCompra: _dc !== null ? _dc : 9999,
+      diasSemCompra: _dc !== null ? _dc+'d' : '—' });
     _addRep(nomevend, metaVal, real);
   });
 
@@ -1128,8 +1143,13 @@ function calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps) {
     if (real <= 0) return; // sem pedido no mês, não inclui
     const nomevend = cli.nomevend||'N/D';
     if (allowedReps && !allowedReps.has((nomevend||'').toUpperCase())) return;
+    const _uc2 = _ultCompraCalc(cli); const _dc2 = _diasCalc(_uc2);
     lCli.push({ nomecli:cli.nomecli||codcli, codcli, nomevend, _meta:0, meta:'—', _real:real, realizado:fmtBRL(real),
-      _ticketMed:_ticketMedCalc(cli), ticketMedio:fmtBRL(_ticketMedCalc(cli)), pct:'—', _pct:0, _semMeta:true });
+      _ticketMed:_ticketMedCalc(cli), ticketMedio:fmtBRL(_ticketMedCalc(cli)), pct:'—', _pct:0, _semMeta:true,
+      _ultCompra: _uc2 ? _uc2.getTime() : 0,
+      ultCompra: _uc2 && _uc2.getTime()>0 ? _uc2.toLocaleDateString('pt-BR') : '—',
+      _diasSemCompra: _dc2 !== null ? _dc2 : 9999,
+      diasSemCompra: _dc2 !== null ? _dc2+'d' : '—' });
     _addRep(nomevend, 0, real);
   });
 
@@ -2834,14 +2854,16 @@ function _drillToClients(idx) {
 // ── Faturamento + Bonificação por rep → clientes ──────────────────────────
 let _fatBonifDrill = null;
 const COLS_FAT_BONIF_CLI = [
-  {key:'nomecli',   label:'Cliente'},
-  {key:'codcli',    label:'Código'},
+  {key:'nomecli',      label:'Cliente'},
+  {key:'codcli',       label:'Código'},
   {label:'', render:function(r){return '<button class="btn-sku-falt" title="Ver histórico" onclick="showClienteHistorico(\''+String(r.codcli).replace(/'/g,"\\'")+'\')" >&#128200;</button>';}},
-  {key:'fat',       label:'Faturamento',   rawKey:'_fat'},
-  {key:'meta',      label:'Meta',          rawKey:'_meta'},
-  {key:'pctMeta',   label:'% Meta',        rawKey:'_pctMeta'},
-  {key:'bonif',     label:'Bonificação',   rawKey:'_bonif'},
-  {key:'pctBonif',  label:'% Bonif/Fat',   rawKey:'_pctBonifRaw'}
+  {key:'fat',          label:'Faturamento',   rawKey:'_fat'},
+  {key:'meta',         label:'Meta',          rawKey:'_meta'},
+  {key:'pctMeta',      label:'% Meta',        rawKey:'_pctMeta'},
+  {key:'ultCompra',    label:'Últ. Compra',   rawKey:'_ultCompra'},
+  {key:'diasSemCompra',label:'Dias s/ Compra',rawKey:'_diasSemCompra'},
+  {key:'bonif',        label:'Bonificação',   rawKey:'_bonif'},
+  {key:'pctBonif',     label:'% Bonif/Fat',   rawKey:'_pctBonifRaw'}
 ];
 
 function _showFatBonif(label, am) {
@@ -2856,12 +2878,28 @@ function _showFatBonif(label, am) {
     if (!cliMap[r.codcli]) cliMap[r.codcli]={nomecli:r.nomecli,codcli:r.codcli,nomevend:r.nomevend,_fat:0,_bonif:0};
     cliMap[r.codcli]._bonif += r.valor;
   });
-  const cliLista = Object.values(cliMap).map(x=>({
-    ...x,
-    fat:fmtBRL(x._fat), bonif:fmtBRL(x._bonif),
-    pctBonif: x._fat>0 ? (x._bonif/x._fat*100).toFixed(1)+'%' : '—',
-    _pctBonifRaw: x._fat>0 ? x._bonif/x._fat*100 : 0
-  })).sort((a,b)=>b._fat-a._fat);
+  // Montar mapa de última data de compra por cliente (all data, not just reference month)
+  const _ultCompraMap = {};
+  const _hoje2 = new Date();
+  (currentKpis._base||[]).forEach(r=>{
+    if (!r._data) return;
+    if (!_ultCompraMap[r.codcli] || r._data > _ultCompraMap[r.codcli]) _ultCompraMap[r.codcli] = r._data;
+  });
+
+  const cliLista = Object.values(cliMap).map(x=>{
+    const uc = _ultCompraMap[x.codcli];
+    const dc = uc ? Math.round((_hoje2 - uc) / 86400000) : null;
+    return {
+      ...x,
+      fat:fmtBRL(x._fat), bonif:fmtBRL(x._bonif),
+      pctBonif: x._fat>0 ? (x._bonif/x._fat*100).toFixed(1)+'%' : '—',
+      _pctBonifRaw: x._fat>0 ? x._bonif/x._fat*100 : 0,
+      _ultCompra: uc ? uc.getTime() : 0,
+      ultCompra: uc ? uc.toLocaleDateString('pt-BR') : '—',
+      _diasSemCompra: dc !== null ? dc : 9999,
+      diasSemCompra: dc !== null ? dc+'d' : '—'
+    };
+  }).sort((a,b)=>b._fat-a._fat);
 
   const title = 'Faturamento + Bonificação — '+label;
 
@@ -2936,12 +2974,14 @@ function _metaCliDrill(nvEnc) {
   var lista = _metaCliData.lCli.filter(function(r){return r.nomevend===nomevend;})
     .sort(function(a,b){return b._meta-a._meta;});
   var COLS_META_CLI = [
-    {key:'nomecli',    label:'Cliente'},
-    {key:'codcli',     label:'Código'},
-    {key:'ticketMedio',label:'Ticket Médio',  rawKey:'_ticketMed'},
-    {key:'meta',       label:'Meta',          rawKey:'_meta'},
-    {key:'realizado',  label:'Realizado Mês', rawKey:'_real'},
-    {key:'pct',        label:'% Atingido',    rawKey:'_pct'}
+    {key:'nomecli',      label:'Cliente'},
+    {key:'codcli',       label:'Código'},
+    {key:'ticketMedio',  label:'Ticket Médio',    rawKey:'_ticketMed'},
+    {key:'meta',         label:'Meta',            rawKey:'_meta'},
+    {key:'realizado',    label:'Realizado Mês',   rawKey:'_real'},
+    {key:'pct',          label:'% Atingido',      rawKey:'_pct'},
+    {key:'ultCompra',    label:'Últ. Compra',     rawKey:'_ultCompra'},
+    {key:'diasSemCompra',label:'Dias s/ Compra',  rawKey:'_diasSemCompra'}
   ];
   showModal('Meta — '+nomevend, lista, COLS_META_CLI);
 }
