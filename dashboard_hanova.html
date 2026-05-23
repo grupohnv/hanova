@@ -806,10 +806,13 @@ function validateAndStore(type, rows, filename) {
     const codcliCol  = findCol(headers, ['codcli','cod_cli','codparc','codigo','cod cli','codigo cliente']);
     const nomeCol    = findCol(headers, ['nomecli','nome','razaosocial','cliente','razão social']);
     const vendCol    = findCol(headers, ['nomevend','vendedor','representante','vend','rep']);
+    const lojaCol    = findCol(headers, ['loja']);
+    const codRedeCol = findCol(headers, ['cod_rede','codrede','rede']);
+    const inativoCol = findCol(headers, ['inativo']);
     if (!codcliCol || !vendCol) {
       setStatus(type,'error',`❌ Colunas necessárias: codcli + nomevend`); return;
     }
-    loaded.cadastro = { rows, codcliCol, nomeCol, vendCol };
+    loaded.cadastro = { rows, codcliCol, nomeCol, vendCol, lojaCol, codRedeCol, inativoCol };
     setStatus(type,'ok',`✅ ${filename} · ${rows.length.toLocaleString()} clientes`);
   }
 
@@ -844,10 +847,17 @@ const DATA_INICIAL = new Date('2025-01-01');
 function prepareData() {
   // Build cadastro map
   cadastroMap.clear();
-  const { rows:cr, codcliCol:cc, nomeCol:nc, vendCol:vc } = loaded.cadastro;
+  const { rows:cr, codcliCol:cc, nomeCol:nc, vendCol:vc, lojaCol:lc, codRedeCol:rc, inativoCol:ic } = loaded.cadastro;
   cr.forEach(r => {
+    const inativo = ic ? String(r[ic]||'').trim().toUpperCase() : '';
+    if (inativo === 'SIM') return; // ignora inativos
     const key = String(r[cc]||'').trim();
-    if (key) cadastroMap.set(key, { nomecli: String(r[nc]||'').trim(), nomevend: String(r[vc]||'').trim() });
+    if (key) cadastroMap.set(key, {
+      nomecli:  String(r[nc]||'').trim(),
+      nomevend: String(r[vc]||'').trim(),
+      loja:     lc ? String(r[lc]||'').trim() : '',
+      cod_rede: rc ? String(r[rc]||'').trim() : ''
+    });
   });
 
   // Build produtos set (normalize: uppercase, trim)
@@ -2291,7 +2301,15 @@ async function loadEmbeddedData() {
     const data = JSON.parse(new TextDecoder().decode(buf));
 
     cadastroMap.clear();
-    data.cadastro.forEach(([cod,nome,vend])=>{ if(cod) cadastroMap.set(String(cod),{nomecli:nome||'',nomevend:vend||''}); });
+    // cadCompact: [codcli, nomecli, nomevend, loja, cod_rede]
+    data.cadastro.forEach(([cod,nome,vend,loja,codRede])=>{
+      if(cod) cadastroMap.set(String(cod),{
+        nomecli:  nome    || '',
+        nomevend: vend    || '',
+        loja:     loja    || '',
+        cod_rede: codRede || ''
+      });
+    });
 
     produtosAtivos.clear();
     data.produtos.forEach(p=>{ if(p) produtosAtivos.add(String(p).trim().toUpperCase()); });
@@ -2425,10 +2443,17 @@ function applyUpdate() {
   setTimeout(() => {
     try {
       cadastroMap.clear();
-      const { rows:cr, codcliCol:cc, nomeCol:nc, vendCol:vc } = _updLoaded.cadastro;
+      const { rows:cr, codcliCol:cc, nomeCol:nc, vendCol:vc, lojaCol:lc2, codRedeCol:rc2, inativoCol:ic2 } = _updLoaded.cadastro;
       cr.forEach(r => {
+        const inativo2 = ic2 ? String(r[ic2]||'').trim().toUpperCase() : '';
+        if (inativo2 === 'SIM') return;
         const key = String(r[cc]||'').trim();
-        if (key) cadastroMap.set(key, { nomecli:String(r[nc]||'').trim(), nomevend:String(r[vc]||'').trim() });
+        if (key) cadastroMap.set(key, {
+          nomecli:  String(r[nc]||'').trim(),
+          nomevend: String(r[vc]||'').trim(),
+          loja:     lc2 ? String(r[lc2]||'').trim() : '',
+          cod_rede: rc2 ? String(r[rc2]||'').trim() : ''
+        });
       });
 
       produtosAtivos.clear();
