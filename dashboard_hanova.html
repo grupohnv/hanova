@@ -2872,7 +2872,7 @@ function _showPositivados(mlHoje, refAM, base) {
 
     cadastroMap.forEach((cad, codcli) => {
       const rep = cad.nomevend || 'N/D';
-      if (filtroRep && filtroRep !== '__TODOS__' && rep !== filtroRep) return;
+      if (filtroRep && filtroRep !== '__TODOS__' && rep.toUpperCase() !== filtroRep.toUpperCase()) return;
       const key = cadGrupoKey(cad, codcli);
       if (!grupos.has(key)) {
         const isRede = cad.tipo === 'SIM' && cad.cod_rede;
@@ -3009,11 +3009,19 @@ function _showPositivados(mlHoje, refAM, base) {
 
   _positivadosDrill = { title, rows: rowsComTodos, cols: COLS_CLI_POSIT };
 
-  // Se um rep específico está selecionado, abre direto na lista de clientes
-  const _repFiltroAtual = document.getElementById('filtroRep')?.value;
+  // Se rep está logado OU filtro de rep selecionado → abre direto na lista de clientes
+  let _repFiltroAtual = document.getElementById('filtroRep')?.value;
+  // Rep logado: garante que abrimos a carteira dele mesmo se dropdown ficou em TODOS
+  if (currentUser && currentUser.nomevend && currentUser.nomevend.length > 0) {
+    const sel = document.getElementById('filtroRep');
+    const opt = sel ? Array.from(sel.options).find(o =>
+      currentUser.nomevend.some(v => v.toUpperCase() === o.value.toUpperCase())) : null;
+    _repFiltroAtual = opt ? opt.value : currentUser.nomevend[0];
+  }
   if (_repFiltroAtual && _repFiltroAtual !== 'TODOS') {
     const listaRep = buildListaRep(_repFiltroAtual);
-    showModal(title + ' — ' + _repFiltroAtual, listaRep, COLS_CLI_POSIT);
+    const labelShow = (currentUser && currentUser.label) ? currentUser.label : _repFiltroAtual;
+    showModal(title + ' — ' + labelShow, listaRep, COLS_CLI_POSIT);
     return;
   }
 
@@ -3042,7 +3050,16 @@ function _showByRep(title, lista, cols, valorKey, repExtra) {
   const isAdmin = currentUser && !currentUser.nomevend;
   const repFiltro = document.getElementById('filtroRep')?.value;
   if (!isAdmin || (repFiltro && repFiltro !== 'TODOS')) {
-    showModal(title, lista, cols);
+    // Filtro de segurança: se rep está logado, garante que só aparecem clientes dele
+    let listaFinal = lista;
+    if (currentUser && currentUser.nomevend && currentUser.nomevend.length > 0) {
+      const allowed = new Set(currentUser.nomevend.map(v => v.toUpperCase()));
+      listaFinal = lista.filter(r => {
+        const vend = (r.nomevend || '').toUpperCase();
+        return allowed.has(vend);
+      });
+    }
+    showModal(title, listaFinal, cols);
     return;
   }
   const map = new Map();
