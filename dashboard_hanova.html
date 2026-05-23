@@ -1814,7 +1814,8 @@ function updateDOM(k, mesRef, repLabel) {
         {key:'ticketMedio',label:'Ticket Médio',  rawKey:'_ticketMed'},
         {key:'meta',       label:'Meta',          rawKey:'_meta'},
         {key:'realizado',  label:'Realizado Mês', rawKey:'_real'},
-        {key:'pct',        label:'% Atingido',    rawKey:'_pct'}
+        {key:'pct',        label:'% Atingido',    rawKey:'_pct'},
+        {key:'ultCompra',  label:'Últ. Compra',   rawKey:'_ultCompra', noRawExcel:true}
       ]);
       return;
     }
@@ -1858,7 +1859,8 @@ function updateDOM(k, mesRef, repLabel) {
         {key:'ticketMedio',label:'Ticket Médio',  rawKey:'_ticketMed'},
         {key:'meta',       label:'Meta',          rawKey:'_meta'},
         {key:'realizado',  label:'Realizado Mês', rawKey:'_real'},
-        {key:'pct',        label:'% Atingido',    rawKey:'_pct'}
+        {key:'pct',        label:'% Atingido',    rawKey:'_pct'},
+        {key:'ultCompra',  label:'Últ. Compra',   rawKey:'_ultCompra', noRawExcel:true}
       ];
       showModal('Meta por Cliente', lista, COLS_META_CLI_REP);
       return;
