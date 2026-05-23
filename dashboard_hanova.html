@@ -809,10 +809,11 @@ function validateAndStore(type, rows, filename) {
     const lojaCol    = findCol(headers, ['loja']);
     const codRedeCol = findCol(headers, ['cod_rede','codrede','rede']);
     const inativoCol = findCol(headers, ['inativo']);
+    const tipoCol    = findCol(headers, ['tipo']);
     if (!codcliCol || !vendCol) {
       setStatus(type,'error',`❌ Colunas necessárias: codcli + nomevend`); return;
     }
-    loaded.cadastro = { rows, codcliCol, nomeCol, vendCol, lojaCol, codRedeCol, inativoCol };
+    loaded.cadastro = { rows, codcliCol, nomeCol, vendCol, lojaCol, codRedeCol, inativoCol, tipoCol };
     setStatus(type,'ok',`✅ ${filename} · ${rows.length.toLocaleString()} clientes`);
   }
 
@@ -847,7 +848,7 @@ const DATA_INICIAL = new Date('2025-01-01');
 function prepareData() {
   // Build cadastro map
   cadastroMap.clear();
-  const { rows:cr, codcliCol:cc, nomeCol:nc, vendCol:vc, lojaCol:lc, codRedeCol:rc, inativoCol:ic } = loaded.cadastro;
+  const { rows:cr, codcliCol:cc, nomeCol:nc, vendCol:vc, lojaCol:lc, codRedeCol:rc, inativoCol:ic, tipoCol:tc } = loaded.cadastro;
   cr.forEach(r => {
     const inativo = ic ? String(r[ic]||'').trim().toUpperCase() : '';
     if (inativo === 'SIM') return; // ignora inativos
@@ -856,7 +857,8 @@ function prepareData() {
       nomecli:  String(r[nc]||'').trim(),
       nomevend: String(r[vc]||'').trim(),
       loja:     lc ? String(r[lc]||'').trim() : '',
-      cod_rede: rc ? String(r[rc]||'').trim() : ''
+      cod_rede: rc ? String(r[rc]||'').trim() : '',
+      tipo:     tc ? String(r[tc]||'').trim().toUpperCase() : ''
     });
   });
 
@@ -2325,7 +2327,7 @@ async function loadEmbeddedData() {
     const data = JSON.parse(new TextDecoder().decode(buf));
 
     cadastroMap.clear();
-    data.cadastro.forEach(([cod,nome,vend])=>{ if(cod) cadastroMap.set(String(cod),{nomecli:nome||'',nomevend:vend||''}); });
+    data.cadastro.forEach(([cod,nome,vend,loja,codRede,tipo])=>{ if(cod) cadastroMap.set(String(cod),{nomecli:nome||'',nomevend:vend||'',loja:loja||'',cod_rede:codRede||'',tipo:(tipo||'').toUpperCase()}); });
 
     produtosAtivos.clear();
     data.produtos.forEach(p=>{ if(p) produtosAtivos.add(String(p).trim().toUpperCase()); });
@@ -2430,8 +2432,12 @@ function updHandleFile(type, input) {
         const codcliCol = findCol(headers, ['codcli','cod_cli','codparc','codigo']);
         const nomeCol   = findCol(headers, ['nomecli','nome_cli','nomeparc','nome']);
         const vendCol   = findCol(headers, ['nomevend','vendedor','representante','vend']);
+        const lojaColU  = findCol(headers, ['loja']);
+        const codRedeColU = findCol(headers, ['cod_rede','codrede','rede']);
+        const inativoColU = findCol(headers, ['inativo']);
+        const tipoColU  = findCol(headers, ['tipo']);
         if (!codcliCol || !vendCol) throw new Error('Colunas não encontradas: codcli + nomevend');
-        _updLoaded.cadastro = { rows, codcliCol, nomeCol, vendCol };
+        _updLoaded.cadastro = { rows, codcliCol, nomeCol, vendCol, lojaCol:lojaColU, codRedeCol:codRedeColU, inativoCol:inativoColU, tipoCol:tipoColU };
       } else {
         const prodCol = findCol(headers, ['produto','descprod','desc_prod','descricao','nome','product','item']) || headers[0];
         _updLoaded.produtos = { rows, col: prodCol };
@@ -2459,7 +2465,7 @@ function applyUpdate() {
   setTimeout(() => {
     try {
       cadastroMap.clear();
-      const { rows:cr, codcliCol:cc, nomeCol:nc, vendCol:vc, lojaCol:lc2, codRedeCol:rc2, inativoCol:ic2 } = _updLoaded.cadastro;
+      const { rows:cr, codcliCol:cc, nomeCol:nc, vendCol:vc, lojaCol:lc2, codRedeCol:rc2, inativoCol:ic2, tipoCol:tc2 } = _updLoaded.cadastro;
       cr.forEach(r => {
         const inativo2 = ic2 ? String(r[ic2]||'').trim().toUpperCase() : '';
         if (inativo2 === 'SIM') return;
@@ -2468,7 +2474,8 @@ function applyUpdate() {
           nomecli:  String(r[nc]||'').trim(),
           nomevend: String(r[vc]||'').trim(),
           loja:     lc2 ? String(r[lc2]||'').trim() : '',
-          cod_rede: rc2 ? String(r[rc2]||'').trim() : ''
+          cod_rede: rc2 ? String(r[rc2]||'').trim() : '',
+          tipo:     tc2 ? String(r[tc2]||'').trim().toUpperCase() : ''
         });
       });
 
@@ -2857,21 +2864,27 @@ function _showPositivados(mlHoje, refAM, base) {
 
   // ── Monta lista completa de clientes por rep (todos, não só positivados) ──
   // Usa cadastroMap (já filtrado de inativos) como fonte de carteira
-  // Agrupa por COD_REDE quando existir
+  // Agrupa por COD_REDE apenas quando tipo === 'SIM'
+
+  // Helper: chave efetiva de agrupamento (rede ou individual)
+  function cadGrupoKey(cad, codcli) {
+    return (cad.tipo === 'SIM' && cad.cod_rede) ? cad.cod_rede : String(codcli);
+  }
 
   function buildListaRep(filtroRep) {
-    // key: cod_rede || codcli → grupo
+    // key: cod_rede (se tipo=SIM) || codcli → grupo
     const grupos = new Map();
 
     cadastroMap.forEach((cad, codcli) => {
       const rep = cad.nomevend || 'N/D';
       if (filtroRep && filtroRep !== '__TODOS__' && rep !== filtroRep) return;
-      const key = cad.cod_rede || codcli;
+      const key = cadGrupoKey(cad, codcli);
       if (!grupos.has(key)) {
-        const nomeDisplay = (cad.cod_rede && cad.loja) ? cad.loja : (cad.nomecli || codcli);
+        const isRede = cad.tipo === 'SIM' && cad.cod_rede;
+        const nomeDisplay = (isRede && cad.loja) ? cad.loja : (cad.nomecli || codcli);
         grupos.set(key, {
           nomecli: nomeDisplay, codcli, nomevend: rep,
-          cod_rede: cad.cod_rede || '',
+          cod_rede: isRede ? cad.cod_rede : '',
           codclis: [], _valor: 0, _ticketMed: 0, _ultDt: new Date(0)
         });
       }
@@ -2881,7 +2894,7 @@ function _showPositivados(mlHoje, refAM, base) {
     // Somar faturamento no mês de referência e calcular ticket + última compra
     base.filter(r => r._anomes === refAM).forEach(r => {
       const cad = cadastroMap.get(String(r.codcli));
-      const key = cad?.cod_rede || String(r.codcli);
+      const key = cad ? cadGrupoKey(cad, r.codcli) : String(r.codcli);
       if (grupos.has(key)) grupos.get(key)._valor += r.valor;
     });
 
@@ -2920,11 +2933,11 @@ function _showPositivados(mlHoje, refAM, base) {
 
   // ── Carteira por rep para % e média histórica ─────────────────────────────
   // Usa cadastroMap para carteira ativa (inativos já excluídos)
-  const carteiraRepMap = {}; // rep → Set(key: cod_rede || codcli)
+  const carteiraRepMap = {}; // rep → Set(key: cod_rede se tipo=SIM, senão codcli)
   cadastroMap.forEach((cad, codcli) => {
     const rep = cad.nomevend || 'N/D';
     if (!carteiraRepMap[rep]) carteiraRepMap[rep] = new Set();
-    carteiraRepMap[rep].add(cad.cod_rede || codcli);
+    carteiraRepMap[rep].add(cadGrupoKey(cad, codcli));
   });
 
   const todosAMsHist = todosAMs.filter(am => am < refAM);
@@ -2936,7 +2949,7 @@ function _showPositivados(mlHoje, refAM, base) {
       const posit = new Set();
       base.filter(r=>r._anomes===am && (rep==='__TODOS__'||r.nomevend===rep)).forEach(r=>{
         const cad = cadastroMap.get(String(r.codcli));
-        posit.add(cad?.cod_rede || String(r.codcli));
+        posit.add(cad ? cadGrupoKey(cad, r.codcli) : String(r.codcli));
       });
       return s + (posit.size / cart.size * 100);
     }, 0);
@@ -2952,7 +2965,7 @@ function _showPositivados(mlHoje, refAM, base) {
     const positSet = new Set();
     base.filter(r=>r._anomes===refAM && r.nomevend===rep).forEach(r=>{
       const cad = cadastroMap.get(String(r.codcli));
-      positSet.add(cad?.cod_rede || String(r.codcli));
+      positSet.add(cad ? cadGrupoKey(cad, r.codcli) : String(r.codcli));
     });
     const positivos = positSet.size;
     const pct = carteira ? +(positivos/carteira*100).toFixed(1) : 0;
@@ -2966,17 +2979,17 @@ function _showPositivados(mlHoje, refAM, base) {
 
   // ── Linha TODOS ───────────────────────────────────────────────────────────
   const todosCart = new Set();
-  cadastroMap.forEach((cad, codcli) => todosCart.add(cad.cod_rede || codcli));
+  cadastroMap.forEach((cad, codcli) => todosCart.add(cadGrupoKey(cad, codcli)));
   const todosPosit = new Set();
   base.filter(r=>r._anomes===refAM).forEach(r=>{
     const cad = cadastroMap.get(String(r.codcli));
-    todosPosit.add(cad?.cod_rede || String(r.codcli));
+    todosPosit.add(cad ? cadGrupoKey(cad, r.codcli) : String(r.codcli));
   });
   const todosPct = todosCart.size ? +(todosPosit.size/todosCart.size*100).toFixed(1) : 0;
   const todosMedHist = todosAMsHist.length ? +(todosAMsHist.reduce((s,am)=>{
     const ps = new Set();
     base.filter(r=>r._anomes===am).forEach(r=>{
-      const cad=cadastroMap.get(String(r.codcli)); ps.add(cad?.cod_rede||String(r.codcli));
+      const cad=cadastroMap.get(String(r.codcli)); ps.add(cad ? cadGrupoKey(cad,r.codcli) : String(r.codcli));
     });
     return s+(ps.size/todosCart.size*100);
   },0)/todosAMsHist.length).toFixed(1) : 0;
