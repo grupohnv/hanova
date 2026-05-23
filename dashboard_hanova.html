@@ -3009,6 +3009,14 @@ function _showPositivados(mlHoje, refAM, base) {
 
   _positivadosDrill = { title, rows: rowsComTodos, cols: COLS_CLI_POSIT };
 
+  // Se um rep específico está selecionado, abre direto na lista de clientes
+  const _repFiltroAtual = document.getElementById('filtroRep')?.value;
+  if (_repFiltroAtual && _repFiltroAtual !== 'TODOS') {
+    const listaRep = buildListaRep(_repFiltroAtual);
+    showModal(title + ' — ' + _repFiltroAtual, listaRep, COLS_CLI_POSIT);
+    return;
+  }
+
   const COLS_REP_POSIT = [
     {key:'nomevend',  label:'Representante'},
     {key:'positivos', label:'Positivados'},
