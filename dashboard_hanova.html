@@ -1288,9 +1288,11 @@ function calcAumentaramSku(clienteMap) {
 }
 
 function calcPositivados(base, refAM) {
-  const positivados = new Set(base.filter(r=>r._anomes===refAM).map(r=>r.codcli));
-  const carteira = new Set(base.map(r=>r.codcli)).size;
-  return { positivados:positivados.size, carteira, pct: carteira?(positivados.size/carteira*100).toFixed(1):'0' };
+  const m = buildClienteMapConsolidado(base);
+  let positivos = 0;
+  m.forEach(cli => { if (cli.rows.some(r => r._anomes === refAM)) positivos++; });
+  const carteira = m.size;
+  return { positivados: positivos, carteira, pct: carteira?(positivos/carteira*100).toFixed(1):'0' };
 }
 
 /* ── helpers ──────────────────────────────────── */
