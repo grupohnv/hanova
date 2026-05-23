@@ -2994,7 +2994,7 @@ function _showPositivados(mlHoje, refAM, base) {
     fatTotal:fmtBRL(listasTodos.reduce((s,c)=>s+c._valor,0)),
     _fatTotal:listasTodos.reduce((s,c)=>s+c._valor,0), lista:listasTodos, _isTodos:true };
 
-  const rowsComTodos = [todosRow, ...rows];
+  const rowsComTodos = [todosRow, ...rows].map((r,i)=>({...r,_rowId:i}));
 
   const COLS_CLI_POSIT = [
     {key:'nomecli',    label:'Cliente'},
@@ -3016,14 +3016,14 @@ function _showPositivados(mlHoje, refAM, base) {
     {key:'pct',       label:'% Positivado',    rawKey:'_pct'},
     {key:'mediaHist', label:'Média Histórica',  rawKey:'_mediaHist'},
     {key:'fatTotal',  label:'Faturamento',      rawKey:'_fatTotal'},
-    {label:'', render:(r)=>`<button class="btn-ver-cli" onclick="_positivadosDrillCli(${JSON.stringify(r.nomevend)})">Ver clientes →</button>`}
+    {label:'', render:(r)=>`<button class="btn-ver-cli" onclick="_positivadosDrillCli(${r._rowId})">Ver clientes →</button>`}
   ];
   showModal(title + ' — por Representante', rowsComTodos, COLS_REP_POSIT);
 }
 
-function _positivadosDrillCli(nomevend) {
+function _positivadosDrillCli(rowId) {
   if (!_positivadosDrill) return;
-  const rep = _positivadosDrill.rows.find(r => r.nomevend === nomevend);
+  const rep = _positivadosDrill.rows.find(r => r._rowId === rowId);
   if (!rep) return;
   const label = rep._isTodos ? 'Todos os Representantes' : rep.nomevend;
   showModal(_positivadosDrill.title + ' — ' + label, rep.lista, _positivadosDrill.cols);
@@ -3067,7 +3067,7 @@ function _showByRep(title, lista, cols, valorKey, repExtra) {
   };
   todosRow.valorFmt = hasVal ? fmtBRL(todosRow._soma) : '—';
   todosRow.avgFmt   = hasAvg ? (todosRow._avgSum/Math.max(todosRow.total,1)).toFixed(1) : '—';
-  const rowsComTodos = [todosRow, ...rows];
+  const rowsComTodos = [todosRow, ...rows].map((r,i)=>({...r,_rowId:i}));
 
   _drillRep = {title, rows: rowsComTodos, cols, valorKey, avgKey: repExtra?.avgKey};
   const drillCols = [
@@ -3075,14 +3075,14 @@ function _showByRep(title, lista, cols, valorKey, repExtra) {
     {key:'total', label:'Clientes'},
     ...(hasAvg ? [{key:'avgFmt', label: repExtra.avgLabel||'Média'}] : []),
     ...(hasVal ? [{key:'valorFmt', label:'Valor Total'}] : []),
-    {label:'', render:(r)=>`<button class="btn-ver-cli" onclick="_drillToClients(${JSON.stringify(r.nomevend)})">Ver clientes →</button>`}
+    {label:'', render:(r)=>`<button class="btn-ver-cli" onclick="_drillToClients(${r._rowId})">Ver clientes →</button>`}
   ];
   showModal(title + ' — por Representante', rowsComTodos, drillCols);
 }
 
-function _drillToClients(nomevend) {
+function _drillToClients(rowId) {
   if (!_drillRep) return;
-  const rep = _drillRep.rows.find(r => r.nomevend === nomevend);
+  const rep = _drillRep.rows.find(r => r._rowId === rowId);
   if (!rep) return;
   const sortKey = _drillRep.valorKey || (_drillRep.avgKey ? _drillRep.avgKey : null);
   const lista = sortKey
