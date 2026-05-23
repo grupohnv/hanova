@@ -91,7 +91,8 @@ const cVend   = normCol(hCad, ['nomevend','nome_vend','vendedor','representante'
 const cInativo = normCol(hCad, ['inativo']);
 const cCodRede = normCol(hCad, ['cod_rede','codrede','rede']);
 const cLoja    = normCol(hCad, ['loja']);
-console.log('Cad cols:', {cCod, cNome, cVend, cInativo, cCodRede, cLoja});
+const cTipo    = normCol(hCad, ['tipo']);
+console.log('Cad cols:', {cCod, cNome, cVend, cInativo, cCodRede, cLoja, cTipo});
 
 // Filtrar inativos e montar cadastro compacto
 const cadCompact = rawCad
@@ -100,11 +101,12 @@ const cadCompact = rawCad
     return inativo !== 'SIM';
   })
   .map(r => [
-    String(r[cCod]     || ''),
-    String(r[cNome]    || ''),
-    String(r[cVend]    || ''),
-    String(r[cLoja]    || ''),
-    String(r[cCodRede] || '')
+    String(r[cCod]     || ''),  // 0 codcli
+    String(r[cNome]    || ''),  // 1 nomecli
+    String(r[cVend]    || ''),  // 2 nomevend
+    String(r[cLoja]    || ''),  // 3 loja
+    String(r[cCodRede] || ''),  // 4 cod_rede
+    String(r[cTipo]    || '')   // 5 tipo  (SIM = consolidar como rede)
   ]);
 
 // ---- PRODUTOS HANOVA ----
@@ -277,7 +279,7 @@ const output = {
   bonificacoes: bonifCompact, // [codcli, valor, anomes]
   meta: {
     colsDados: ['codcli','valor','anomes','descprod'],
-    colsCadastro: ['codcli','nomecli','nomevend','loja','cod_rede'],
+    colsCadastro: ['codcli','nomecli','nomevend','loja','cod_rede','tipo'],
     colsMetas: ['codcli','metaValor'],
     colsBonif: ['codcli','valor','anomes'],
     geradoEm: new Date().toISOString()
