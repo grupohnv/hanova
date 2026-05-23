@@ -1043,8 +1043,8 @@ function computeKPIs(base, mesRef, meta, allowedReps, bonif) {
     bonifMensal.push({ label: anoMesToLabel(am), valor: bonV, am });
   }
 
-  // ── CLIENTES POR CÓDIGO (histórico) ──────────
-  const clienteMap = buildClienteMap(base);
+  // ── CLIENTES POR CÓDIGO (histórico) — consolidado por rede quando tipo=SIM ──
+  const clienteMap = buildClienteMapConsolidado(base);
 
   // ── INATIVOS 90+ ─────────────────────────────
   const refDate = new Date(mesRef.ano, mesRef.mes, 0); // last day of ref month
@@ -1129,34 +1129,45 @@ function calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps) {
     repMap.get(nomevend)._real += real;
   }
 
-  // 1. Clientes COM meta definida
+  // 1. Clientes COM meta definida — agrupa por chave consolidada (rede ou individual)
+  const consolidatedMeta = new Map(); // key consolidada → { nomecli, nomevend, _meta }
   metaMap.forEach((metaVal, codcli) => {
-    const cli = clienteMap.get(codcli);
-    const cad = !cli ? (cadastroMap.get(codcli)||null) : null;
-    const nomecli  = cli ? (cli.nomecli||codcli) : (cad ? (cad.nomecli||codcli) : codcli);
-    const nomevend = cli ? (cli.nomevend||'N/D') : (cad ? (cad.nomevend||'N/D') : 'N/D');
+    const cadMeta = cadastroMap.get(String(codcli));
+    const key = cadMeta ? cadGrupoKey(cadMeta, String(codcli)) : String(codcli);
+    if (!consolidatedMeta.has(key)) {
+      const cli2 = clienteMap.get(key);
+      const nomecli2 = cli2 ? (cli2.nomecli||key) : (cadMeta ? (cadMeta.nomecli||key) : key);
+      const nomevend2 = cli2 ? (cli2.nomevend||'N/D') : (cadMeta ? (cadMeta.nomevend||'N/D') : 'N/D');
+      consolidatedMeta.set(key, { nomecli: nomecli2, nomevend: nomevend2, _meta: 0 });
+    }
+    consolidatedMeta.get(key)._meta += metaVal;
+  });
+  const metaKeysProcessadas = new Set();
+  consolidatedMeta.forEach(({ nomecli, nomevend, _meta: metaVal }, key) => {
+    const cli = clienteMap.get(key);
     if (allowedReps && !allowedReps.has((nomevend||'').toUpperCase())) return;
     const real = cli ? cli.rows.filter(r=>r._anomes===refAM).reduce((s,r)=>s+r.valor,0) : 0;
     const pct  = metaVal > 0 ? +(real/metaVal*100).toFixed(1) : 0;
     const _uc = _ultCompraCalc(cli); const _dc = _diasCalc(_uc);
-    lCli.push({ nomecli, codcli, nomevend, _meta:metaVal, meta:fmtBRL(metaVal), _real:real, realizado:fmtBRL(real),
+    lCli.push({ nomecli, codcli: key, nomevend, _meta:metaVal, meta:fmtBRL(metaVal), _real:real, realizado:fmtBRL(real),
       _ticketMed:_ticketMedCalc(cli), ticketMedio:fmtBRL(_ticketMedCalc(cli)), pct:pct+'%', _pct:pct, _semMeta:false,
       _ultCompra: _uc ? _uc.getTime() : 0,
       ultCompra: _uc && _uc.getTime()>0 ? String(_uc.getMonth()+1).padStart(2,'0')+'/'+_uc.getFullYear() : '—',
       _diasSemCompra: _dc !== null ? _dc : 9999,
       diasSemCompra: _dc !== null ? _dc+'d' : '—' });
+    metaKeysProcessadas.add(key);
     _addRep(nomevend, metaVal, real);
   });
 
   // 2. Clientes SEM meta mas com pedido > 0 no mês de referência
-  clienteMap.forEach((cli, codcli) => {
-    if (metaMap.has(codcli)) return; // já incluído acima
+  clienteMap.forEach((cli, key) => {
+    if (metaKeysProcessadas.has(key)) return; // já incluído acima via meta consolidada
     const real = cli.rows.filter(r=>r._anomes===refAM).reduce((s,r)=>s+r.valor,0);
     if (real <= 0) return; // sem pedido no mês, não inclui
     const nomevend = cli.nomevend||'N/D';
     if (allowedReps && !allowedReps.has((nomevend||'').toUpperCase())) return;
     const _uc2 = _ultCompraCalc(cli); const _dc2 = _diasCalc(_uc2);
-    lCli.push({ nomecli:cli.nomecli||codcli, codcli, nomevend, _meta:0, meta:'—', _real:real, realizado:fmtBRL(real),
+    lCli.push({ nomecli:cli.nomecli||key, codcli:key, nomevend, _meta:0, meta:'—', _real:real, realizado:fmtBRL(real),
       _ticketMed:_ticketMedCalc(cli), ticketMedio:fmtBRL(_ticketMedCalc(cli)), pct:'—', _pct:0, _semMeta:true,
       _ultCompra: _uc2 ? _uc2.getTime() : 0,
       ultCompra: _uc2 && _uc2.getTime()>0 ? String(_uc2.getMonth()+1).padStart(2,'0')+'/'+_uc2.getFullYear() : '—',
@@ -1302,6 +1313,36 @@ function buildClienteMap(base) {
     m.get(r.codcli).rows.push(r);
   });
   return m;
+}
+
+// Chave de agrupamento: cod_rede quando tipo=SIM, senão codcli individual
+function cadGrupoKey(cad, codcli) {
+  return (cad && cad.tipo === 'SIM' && cad.cod_rede) ? cad.cod_rede : String(codcli);
+}
+
+// Mapa consolidado: filiais de rede (tipo=SIM) são agrupadas num único entry por cod_rede
+function buildClienteMapConsolidado(base) {
+  const m = new Map();
+  base.forEach(r => {
+    const cad = cadastroMap.get(String(r.codcli));
+    const key = cad ? cadGrupoKey(cad, r.codcli) : String(r.codcli);
+    const isRede = cad && cad.tipo === 'SIM' && cad.cod_rede;
+    const nomeDisplay = (isRede && cad.loja) ? cad.loja : (r.nomecli || r.codcli);
+    if (!m.has(key)) {
+      m.set(key, { codcli: key, nomecli: nomeDisplay, nomevend: r.nomevend || 'N/D', rows: [] });
+    }
+    m.get(key).rows.push(r);
+  });
+  return m;
+}
+
+// Helper: lista consolidada de clientes com faturamento no mês am
+function cliMesConsolidado(rows, am) {
+  const m = buildClienteMapConsolidado(rows);
+  return [...m.values()].map(c => {
+    const _valor = c.rows.filter(r => r._anomes === am).reduce((s, r) => s + r.valor, 0);
+    return { codcli: c.codcli, nomecli: c.nomecli, nomevend: c.nomevend, _valor, valor: fmtBRL(_valor) };
+  }).filter(c => c._valor > 0).sort((a, b) => b._valor - a._valor);
 }
 
 function calcInativos(clienteMap, refDate) {
@@ -1731,28 +1772,21 @@ function updateDOM(k, mesRef, repLabel) {
   const COLS_INATIV = [...COLS_CLI,{key:'ultimaCompraAntes',label:'Última Compra Antes'},{key:'diasInativo',label:'Dias Inativo'},{key:'valorMes',label:'Valor no Mês'}];
   const COLS_SKUV   = [...COLS_CLI,{key:'mesPenultimo',label:'Penúlt. Pedido'},{key:'skuAntes',label:'SKU Antes'},{key:'mesUltimo',label:'Últ. Pedido'},{key:'skuDepois',label:'SKU Depois'},{key:'variacao',label:'Variação'},{key:'valorTotal',label:'Total Comprado'}];
   const _listaFatHoje = () => {
-    const _hj = new Date();
-    const map={};
-    // Agrupa por codcli no mês atual
-    (k._base||[]).filter(r=>r._anomes===refHojeAM).forEach(r=>{
-      if (!map[r.codcli]) map[r.codcli]={nomecli:r.nomecli,codcli:r.codcli,nomevend:r.nomevend,_valor:0};
-      map[r.codcli]._valor+=r.valor;
-    });
-    // Calcula ticket médio e última compra a partir de toda a base
-    const cliMap = buildClienteMap(k._base||[]);
-    return Object.values(map).sort((a,b)=>b._valor-a._valor).map(x=>{
-      const cli = cliMap.get(String(x.codcli));
-      const rowsPos = cli ? cli.rows.filter(r=>r.valor>0) : [];
-      // ticket médio: média dos últimos 3 meses com compra
+    // Consolida redes antes de calcular — usa buildClienteMapConsolidado
+    const cliMc = buildClienteMapConsolidado(k._base||[]);
+    return [...cliMc.values()].map(c => {
+      const _valor = c.rows.filter(r=>r._anomes===refHojeAM).reduce((s,r)=>s+r.valor,0);
+      if (_valor <= 0) return null;
+      const rowsPos = c.rows.filter(r=>r.valor>0);
       const ams = [...new Set(rowsPos.map(r=>r._anomes).filter(Boolean))].sort((a,b)=>b-a);
       const ult3 = ams.slice(0,3);
       const ticketMed = ult3.length ? ult3.reduce((s,am)=>s+rowsPos.filter(r=>r._anomes===am).reduce((ss,r)=>ss+r.valor,0),0)/ult3.length : 0;
-      // última compra
       const ultDt = rowsPos.reduce((d,r)=>(r._data&&r._data>d?r._data:d), new Date(0));
       const ultCompraFmt = ultDt.getTime()>0 ? String(ultDt.getMonth()+1).padStart(2,'0')+'/'+ultDt.getFullYear() : '—';
-      return {...x, valor:fmtBRL(x._valor), _ticketMed:ticketMed, ticketMedio:fmtBRL(ticketMed),
-        _ultCompra: ultDt.getTime()>0 ? ultDt.getTime() : 0, ultCompra: ultCompraFmt};
-    });
+      return { codcli:c.codcli, nomecli:c.nomecli, nomevend:c.nomevend, _valor,
+        valor:fmtBRL(_valor), _ticketMed:ticketMed, ticketMedio:fmtBRL(ticketMed),
+        _ultCompra: ultDt.getTime()>0 ? ultDt.getTime() : 0, ultCompra: ultCompraFmt };
+    }).filter(Boolean).sort((a,b)=>b._valor-a._valor);
   };
   const COLS_FAT_HOJ = [
     ...COLS_CLI,
@@ -1787,9 +1821,7 @@ function updateDOM(k, mesRef, repLabel) {
   const COLS_FAT = [...COLS_CLI,{key:'valor',label:'Faturamento'}];
 
   function cliMes(am) {
-    const map={};
-    (currentKpis._base||[]).forEach(r=>{ if(r._anomes===am){ map[r.codcli]=map[r.codcli]||{nomecli:r.nomecli,codcli:r.codcli,nomevend:r.nomevend,_valor:0}; map[r.codcli]._valor+=r.valor; }});
-    return Object.values(map).sort((a,b)=>b._valor-a._valor).map(x=>({...x,valor:fmtBRL(x._valor)}));
+    return cliMesConsolidado(currentKpis._base||[], am);
   }
 
   setClick('kFatAtual', () => _showFatBonif(ml, refAM));
@@ -1958,13 +1990,8 @@ function updateCharts(k, mesRef) {
       scales:{y:{ticks:{callback:v=>fmtBRL(v)},grid:{color:'rgba(255,255,255,0.05)'}},x:{grid:{color:'rgba(255,255,255,0.04)'}}},
       onClick:(_,els)=>{ if(els.length){
         const item=k.fatMensal[els[0].index];
-        const map={};
-        (currentKpis._base||[]).filter(r=>r._anomes===item.am).forEach(r=>{
-          map[r.codcli]=map[r.codcli]||{nomecli:r.nomecli,codcli:r.codcli,nomevend:r.nomevend,valor:0};
-          map[r.codcli].valor+=r.valor;
-        });
-        showModal(`Faturamento — ${item.label}`,
-          Object.values(map).map(x=>({...x,valor:fmtBRL(x.valor)})).sort((a,b)=>b.valor-a.valor),
+        const lista = cliMesConsolidado(currentKpis._base||[], item.am);
+        showModal(`Faturamento — ${item.label}`, lista,
           [{key:'nomecli',label:'Cliente'},{key:'codcli',label:'Código'},{key:'nomevend',label:'Representante'},{key:'valor',label:'Faturamento'}]);
       }}
     }
@@ -1987,14 +2014,10 @@ function updateCharts(k, mesRef) {
       scales:{y:{ticks:{callback:v=>fmtBRL(v)},grid:{color:'rgba(255,255,255,0.05)'}},x:{grid:{display:false},ticks:{font:{size:10}}}},
       onClick:(_,els)=>{ if(els.length){
         const rep=k.repReal[els[0].index][0];
-        const refAM=mesRef.ano*100+mesRef.mes;
-        const map={};
-        (currentKpis._base||[]).filter(r=>r.nomevend===rep&&r._anomes===refAM).forEach(r=>{
-          map[r.codcli]=map[r.codcli]||{nomecli:r.nomecli,codcli:r.codcli,nomevend:r.nomevend,valor:0};
-          map[r.codcli].valor+=r.valor;
-        });
-        showModal(`${rep} — ${anoMesToLabel(refAM)}`,
-          Object.values(map).map(x=>({...x,valor:fmtBRL(x.valor)})).sort((a,b)=>parseFloat(b.valor)-parseFloat(a.valor)),
+        const refAM2=mesRef.ano*100+mesRef.mes;
+        const baseRep=(currentKpis._base||[]).filter(r=>r.nomevend===rep);
+        const lista2 = cliMesConsolidado(baseRep, refAM2);
+        showModal(`${rep} — ${anoMesToLabel(refAM2)}`, lista2,
           [{key:'nomecli',label:'Cliente'},{key:'codcli',label:'Código'},{key:'valor',label:'Faturamento'}]);
       }}
     }
@@ -2863,10 +2886,7 @@ function _showPositivados(mlHoje, refAM, base) {
   // Usa cadastroMap (já filtrado de inativos) como fonte de carteira
   // Agrupa por COD_REDE apenas quando tipo === 'SIM'
 
-  // Helper: chave efetiva de agrupamento (rede ou individual)
-  function cadGrupoKey(cad, codcli) {
-    return (cad.tipo === 'SIM' && cad.cod_rede) ? cad.cod_rede : String(codcli);
-  }
+  // cadGrupoKey agora é função global (definida junto a buildClienteMapConsolidado)
 
   function buildListaRep(filtroRep) {
     // key: cod_rede (se tipo=SIM) || codcli → grupo
@@ -3137,21 +3157,28 @@ const COLS_FAT_BONIF_CLI = [
 function _showFatBonif(label, am) {
   const bBase = window._bonifFiltradoAtual || bonifBase;
   // Montar mapa de clientes com fat + bonif
+  // Consolida faturamento por rede (tipo=SIM)
+  const cliMapConsolid = buildClienteMapConsolidado(currentKpis._base||[]);
   const cliMap = {};
-  (currentKpis._base||[]).filter(r=>r._anomes===am).forEach(r=>{
-    if (!cliMap[r.codcli]) cliMap[r.codcli]={nomecli:r.nomecli,codcli:r.codcli,nomevend:r.nomevend,_fat:0,_bonif:0};
-    cliMap[r.codcli]._fat += r.valor;
+  cliMapConsolid.forEach((c, key) => {
+    const _fat = c.rows.filter(r=>r._anomes===am).reduce((s,r)=>s+r.valor,0);
+    if (_fat > 0) cliMap[key] = {nomecli:c.nomecli,codcli:key,nomevend:c.nomevend,_fat,_bonif:0};
   });
+  // Bonificações — consolida por chave de rede
   bBase.filter(r=>r._anomes===am).forEach(r=>{
-    if (!cliMap[r.codcli]) cliMap[r.codcli]={nomecli:r.nomecli,codcli:r.codcli,nomevend:r.nomevend,_fat:0,_bonif:0};
-    cliMap[r.codcli]._bonif += r.valor;
+    const cad = cadastroMap.get(String(r.codcli));
+    const key = cad ? cadGrupoKey(cad, r.codcli) : String(r.codcli);
+    const isRede = cad && cad.tipo==='SIM' && cad.cod_rede;
+    const nomecli = (isRede && cad.loja) ? cad.loja : (r.nomecli||r.codcli);
+    if (!cliMap[key]) cliMap[key]={nomecli,codcli:key,nomevend:r.nomevend,_fat:0,_bonif:0};
+    cliMap[key]._bonif += r.valor;
   });
-  // Montar mapa de última data de compra por cliente (all data, not just reference month)
+  // Última data de compra por chave consolidada (all data)
   const _ultCompraMap = {};
   const _hoje2 = new Date();
-  (currentKpis._base||[]).forEach(r=>{
-    if (!r._data) return;
-    if (!_ultCompraMap[r.codcli] || r._data > _ultCompraMap[r.codcli]) _ultCompraMap[r.codcli] = r._data;
+  cliMapConsolid.forEach((c, key) => {
+    const ult = c.rows.reduce((d,r)=>(r._data&&r._data>d?r._data:d), new Date(0));
+    if (ult.getTime() > 0) _ultCompraMap[key] = ult;
   });
 
   const cliLista = Object.values(cliMap).map(x=>{
@@ -3259,14 +3286,13 @@ function _fatRepClick(idx) {
   if (!el || !el._repData) return;
   var rd = el._repData[idx];
   var base = el._base || dadosBase;
-  // agrupa clientes desse rep com total faturado
-  var cliMap = new Map();
-  base.filter(function(r){return r.nomevend===rd.rep;}).forEach(function(r){
-    if (!cliMap.has(r.codcli)) cliMap.set(r.codcli, {nomecli:r.nomecli||r.codcli, codcli:r.codcli, nomevend:r.nomevend, _total:0, total:'R$ 0'});
-    cliMap.get(r.codcli)._total += r.valor;
-  });
-  var lista = [...cliMap.values()].map(function(c){return Object.assign(c,{total:fmtBRL(c._total)});})
-    .sort(function(a,b){return b._total-a._total;});
+  // agrupa clientes desse rep com total faturado — consolida redes (tipo=SIM)
+  var baseRep = base.filter(function(r){return r.nomevend===rd.rep;});
+  var cliMap = buildClienteMapConsolidado(baseRep);
+  var lista = [...cliMap.values()].map(function(c){
+    var total = c.rows.reduce(function(s,r){return s+r.valor;},0);
+    return {nomecli:c.nomecli, codcli:c.codcli, nomevend:c.nomevend, _total:total, total:fmtBRL(total)};
+  }).sort(function(a,b){return b._total-a._total;});
   var cols = [{key:'nomecli',label:'Cliente'},{key:'codcli',label:'Código'},{key:'total',label:'Total Comprado'}];
   showModal('Clientes — '+rd.rep, lista, cols);
 }
@@ -3345,12 +3371,8 @@ function _buildFatCliTable(k) {
     while(mo<=0){mo+=12;y--;} while(mo>12){mo-=12;y++;}
     meses6.push(y*100+mo);
   }
-  const cliMap2 = new Map();
-  k._base.forEach(function(r){
-    if (!r.codcli) return;
-    if (!cliMap2.has(r.codcli)) cliMap2.set(r.codcli,{codcli:r.codcli,nomecli:r.nomecli||r.codcli,rows:[]});
-    cliMap2.get(r.codcli).rows.push(r);
-  });
+  // Usa buildClienteMapConsolidado para agrupar redes (tipo=SIM) como um único cliente
+  const cliMap2 = buildClienteMapConsolidado(k._base);
   const cliData = [...cliMap2.values()].map(function(c){
     const vals = meses6.map(function(am){
       return c.rows.filter(function(r){return r._anomes===am;}).reduce(function(s,r){return s+r.valor;},0);
