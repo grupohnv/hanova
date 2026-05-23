@@ -2852,107 +2852,162 @@ let _drillRep = null;
 let _positivadosDrill = null;
 function _showPositivados(mlHoje, refAM, base) {
   const title = 'Positivados vs Carteira — ' + mlHoje;
-
-  // Todos os meses presentes na base (para média histórica)
   const todosAMs = [...new Set(base.map(r=>r._anomes).filter(Boolean))].sort();
+  const cliMapAll = buildClienteMap(base);
 
-  // Carteira por rep: todos os codcli únicos de cada rep (toda a base)
-  const carteiraRep = {};   // rep → Set(codcli)
-  base.forEach(r => {
-    const v = r.nomevend || 'N/D';
-    if (!carteiraRep[v]) carteiraRep[v] = new Set();
-    carteiraRep[v].add(String(r.codcli));
-  });
+  // ── Monta lista completa de clientes por rep (todos, não só positivados) ──
+  // Usa cadastroMap (já filtrado de inativos) como fonte de carteira
+  // Agrupa por COD_REDE quando existir
 
-  // Positivados no mês de referência por rep
-  const positMes = {};   // rep → Set(codcli)
-  base.filter(r=>r._anomes===refAM).forEach(r => {
-    const v = r.nomevend || 'N/D';
-    if (!positMes[v]) positMes[v] = new Set();
-    positMes[v].add(String(r.codcli));
-  });
+  function buildListaRep(filtroRep) {
+    // key: cod_rede || codcli → grupo
+    const grupos = new Map();
 
-  // Lista de clientes positivados no mês (para drill-down)
-  const cliMapHoje = {};
-  const cliMapAll  = buildClienteMap(base);
-  const _hoje = new Date();
-  base.filter(r=>r._anomes===refAM).forEach(r => {
-    if (!cliMapHoje[r.codcli]) cliMapHoje[r.codcli] = {nomecli:r.nomecli,codcli:r.codcli,nomevend:r.nomevend,_valor:0};
-    cliMapHoje[r.codcli]._valor += r.valor;
-  });
-  const listaCliHoje = Object.values(cliMapHoje).map(x => {
-    const cli = cliMapAll.get(String(x.codcli));
-    const rowsPos = cli ? cli.rows.filter(r=>r.valor>0) : [];
-    const ams = [...new Set(rowsPos.map(r=>r._anomes).filter(Boolean))].sort((a,b)=>b-a);
-    const ult3 = ams.slice(0,3);
-    const tm = ult3.length ? ult3.reduce((s,am)=>s+rowsPos.filter(r=>r._anomes===am).reduce((ss,r)=>ss+r.valor,0),0)/ult3.length : 0;
-    const ultDt = rowsPos.reduce((d,r)=>(r._data&&r._data>d?r._data:d), new Date(0));
-    const ucFmt = ultDt.getTime()>0 ? String(ultDt.getMonth()+1).padStart(2,'0')+'/'+ultDt.getFullYear() : '—';
-    return {...x, valor:fmtBRL(x._valor), _ticketMed:tm, ticketMedio:fmtBRL(tm),
-      _ultCompra: ultDt.getTime()>0 ? ultDt.getTime() : 0, ultCompra: ucFmt};
-  }).sort((a,b)=>b._valor-a._valor);
+    cadastroMap.forEach((cad, codcli) => {
+      const rep = cad.nomevend || 'N/D';
+      if (filtroRep && filtroRep !== '__TODOS__' && rep !== filtroRep) return;
+      const key = cad.cod_rede || codcli;
+      if (!grupos.has(key)) {
+        const nomeDisplay = (cad.cod_rede && cad.loja) ? cad.loja : (cad.nomecli || codcli);
+        grupos.set(key, {
+          nomecli: nomeDisplay, codcli, nomevend: rep,
+          cod_rede: cad.cod_rede || '',
+          codclis: [], _valor: 0, _ticketMed: 0, _ultDt: new Date(0)
+        });
+      }
+      grupos.get(key).codclis.push(codcli);
+    });
 
-  // Média histórica por rep: para cada mês passado, % positivação
-  function mediaHistRep(rep) {
-    const cart = carteiraRep[rep];
-    if (!cart || !cart.size) return 0;
-    // meses com ao menos 1 compra do rep
-    const mesesComVenda = todosAMs.filter(am => am < refAM);
-    if (!mesesComVenda.length) return 0;
-    const soma = mesesComVenda.reduce((s, am) => {
-      const posit = new Set(base.filter(r=>r._anomes===am && r.nomevend===rep).map(r=>String(r.codcli)));
-      return s + (posit.size / cart.size * 100);
-    }, 0);
-    return +(soma / mesesComVenda.length).toFixed(1);
+    // Somar faturamento no mês de referência e calcular ticket + última compra
+    base.filter(r => r._anomes === refAM).forEach(r => {
+      const cad = cadastroMap.get(String(r.codcli));
+      const key = cad?.cod_rede || String(r.codcli);
+      if (grupos.has(key)) grupos.get(key)._valor += r.valor;
+    });
+
+    grupos.forEach((g, key) => {
+      // ticket médio e última compra: considera todos os codclis do grupo
+      let allRows = [];
+      g.codclis.forEach(c => {
+        const cli = cliMapAll.get(String(c));
+        if (cli) allRows = allRows.concat(cli.rows.filter(r=>r.valor>0));
+      });
+      const ams = [...new Set(allRows.map(r=>r._anomes).filter(Boolean))].sort((a,b)=>b-a);
+      const ult3 = ams.slice(0,3);
+      g._ticketMed = ult3.length
+        ? ult3.reduce((s,am)=>s+allRows.filter(r=>r._anomes===am).reduce((ss,r)=>ss+r.valor,0),0)/ult3.length
+        : 0;
+      const ultDt = allRows.reduce((d,r)=>(r._data&&r._data>d?r._data:d), new Date(0));
+      g._ultDt = ultDt;
+    });
+
+    return [...grupos.values()].map(g => {
+      const ucFmt = g._ultDt.getTime()>0
+        ? String(g._ultDt.getMonth()+1).padStart(2,'0')+'/'+g._ultDt.getFullYear() : '—';
+      return {
+        ...g,
+        valor:       fmtBRL(g._valor),
+        ticketMedio: fmtBRL(g._ticketMed),
+        _ticketMed:  g._ticketMed,
+        ultCompra:   ucFmt,
+        _ultCompra:  g._ultDt.getTime()>0 ? g._ultDt.getTime() : 0,
+        positivado:  g._valor > 0 ? '✅ Sim' : '❌ Não',
+        _positivado: g._valor > 0 ? 1 : 0
+      };
+    // Positivados primeiro, depois por faturamento desc
+    }).sort((a,b) => b._positivado - a._positivado || b._valor - a._valor);
   }
 
-  // Montar rows por rep
-  const reps = Object.keys(carteiraRep);
+  // ── Carteira por rep para % e média histórica ─────────────────────────────
+  // Usa cadastroMap para carteira ativa (inativos já excluídos)
+  const carteiraRepMap = {}; // rep → Set(key: cod_rede || codcli)
+  cadastroMap.forEach((cad, codcli) => {
+    const rep = cad.nomevend || 'N/D';
+    if (!carteiraRepMap[rep]) carteiraRepMap[rep] = new Set();
+    carteiraRepMap[rep].add(cad.cod_rede || codcli);
+  });
+
+  const todosAMsHist = todosAMs.filter(am => am < refAM);
+
+  function calcPosHist(rep) {
+    const cart = carteiraRepMap[rep];
+    if (!cart || !cart.size || !todosAMsHist.length) return 0;
+    const soma = todosAMsHist.reduce((s, am) => {
+      const posit = new Set();
+      base.filter(r=>r._anomes===am && (rep==='__TODOS__'||r.nomevend===rep)).forEach(r=>{
+        const cad = cadastroMap.get(String(r.codcli));
+        posit.add(cad?.cod_rede || String(r.codcli));
+      });
+      return s + (posit.size / cart.size * 100);
+    }, 0);
+    return +(soma / todosAMsHist.length).toFixed(1);
+  }
+
+  // ── Montar rows por rep ───────────────────────────────────────────────────
+  const reps = [...new Set([...Object.keys(carteiraRepMap)])];
   const rows = reps.map(rep => {
-    const carteira  = carteiraRep[rep].size;
-    const positivos = (positMes[rep] || new Set()).size;
-    const pct       = carteira ? +(positivos / carteira * 100).toFixed(1) : 0;
-    const mediaHist = mediaHistRep(rep);
-    const lista     = listaCliHoje.filter(c => c.nomevend === rep);
-    const fatTotal  = lista.reduce((s,c)=>s+c._valor, 0);
-    return { nomevend:rep, carteira, positivos, pct: pct+'%', _pct:pct,
-             mediaHist: mediaHist+'%', _mediaHist:mediaHist,
+    const cartConjunto = carteiraRepMap[rep] || new Set();
+    const carteira = cartConjunto.size;
+    // positivados no mês: quantos grupos compraram
+    const positSet = new Set();
+    base.filter(r=>r._anomes===refAM && r.nomevend===rep).forEach(r=>{
+      const cad = cadastroMap.get(String(r.codcli));
+      positSet.add(cad?.cod_rede || String(r.codcli));
+    });
+    const positivos = positSet.size;
+    const pct = carteira ? +(positivos/carteira*100).toFixed(1) : 0;
+    const mediaHist = calcPosHist(rep);
+    const lista = buildListaRep(rep);
+    const fatTotal = lista.reduce((s,c)=>s+c._valor,0);
+    return { nomevend:rep, carteira, positivos, pct:pct+'%', _pct:pct,
+             mediaHist:mediaHist+'%', _mediaHist:mediaHist,
              fatTotal:fmtBRL(fatTotal), _fatTotal:fatTotal, lista };
   }).sort((a,b)=>b._fatTotal-a._fatTotal);
 
-  // Linha TODOS
-  const todosCarteira = new Set(base.map(r=>String(r.codcli))).size;
-  const todosPosit    = new Set(base.filter(r=>r._anomes===refAM).map(r=>String(r.codcli))).size;
-  const todosPct      = todosCarteira ? +(todosPosit/todosCarteira*100).toFixed(1) : 0;
-  // média histórica geral
-  const mesesHist = todosAMs.filter(am=>am<refAM);
-  const todosMediaHist = mesesHist.length
-    ? +(mesesHist.reduce((s,am)=>{
-        const p = new Set(base.filter(r=>r._anomes===am).map(r=>String(r.codcli))).size;
-        return s + (p/todosCarteira*100);
-      },0) / mesesHist.length).toFixed(1)
-    : 0;
-  const todosRow = { nomevend:'⭐ TODOS', carteira:todosCarteira, positivos:todosPosit,
-    pct:todosPct+'%', _pct:todosPct, mediaHist:todosMediaHist+'%', _mediaHist:todosMediaHist,
-    fatTotal:fmtBRL(listaCliHoje.reduce((s,c)=>s+c._valor,0)),
-    _fatTotal: listaCliHoje.reduce((s,c)=>s+c._valor,0),
-    lista: listaCliHoje, _isTodos: true };
+  // ── Linha TODOS ───────────────────────────────────────────────────────────
+  const todosCart = new Set();
+  cadastroMap.forEach((cad, codcli) => todosCart.add(cad.cod_rede || codcli));
+  const todosPosit = new Set();
+  base.filter(r=>r._anomes===refAM).forEach(r=>{
+    const cad = cadastroMap.get(String(r.codcli));
+    todosPosit.add(cad?.cod_rede || String(r.codcli));
+  });
+  const todosPct = todosCart.size ? +(todosPosit.size/todosCart.size*100).toFixed(1) : 0;
+  const todosMedHist = todosAMsHist.length ? +(todosAMsHist.reduce((s,am)=>{
+    const ps = new Set();
+    base.filter(r=>r._anomes===am).forEach(r=>{
+      const cad=cadastroMap.get(String(r.codcli)); ps.add(cad?.cod_rede||String(r.codcli));
+    });
+    return s+(ps.size/todosCart.size*100);
+  },0)/todosAMsHist.length).toFixed(1) : 0;
+  const listasTodos = buildListaRep('__TODOS__');
+  const todosRow = { nomevend:'⭐ TODOS', carteira:todosCart.size, positivos:todosPosit.size,
+    pct:todosPct+'%', _pct:todosPct, mediaHist:todosMedHist+'%', _mediaHist:todosMedHist,
+    fatTotal:fmtBRL(listasTodos.reduce((s,c)=>s+c._valor,0)),
+    _fatTotal:listasTodos.reduce((s,c)=>s+c._valor,0), lista:listasTodos, _isTodos:true };
 
   const rowsComTodos = [todosRow, ...rows];
-  _positivadosDrill = { title, rows: rowsComTodos, cols: [
-    ...COLS_CLI,
-    {key:'valor',      label:'Faturamento',  rawKey:'_valor'},
+
+  const COLS_CLI_POSIT = [
+    {key:'nomecli',    label:'Cliente'},
+    {key:'codcli',     label:'Código'},
+    {key:'nomevend',   label:'Representante'},
+    {label:'', render:function(r){return '<button class="btn-sku-falt" title="Ver histórico" onclick="showClienteHistorico(\''+String(r.codcli).replace(/'/g,"\\'")+'\')" >&#128200;</button>';}},
+    {key:'positivado', label:'Positivado',   rawKey:'_positivado', noRawExcel:true},
+    {key:'valor',      label:'Fat. Mês',     rawKey:'_valor'},
     {key:'ticketMedio',label:'Ticket Médio', rawKey:'_ticketMed'},
     {key:'ultCompra',  label:'Últ. Compra',  rawKey:'_ultCompra', noRawExcel:true}
-  ]};
+  ];
+
+  _positivadosDrill = { title, rows: rowsComTodos, cols: COLS_CLI_POSIT };
 
   const COLS_REP_POSIT = [
-    {key:'nomevend',   label:'Representante'},
-    {key:'positivos',  label:'Positivados'},
-    {key:'carteira',   label:'Carteira Ativa'},
-    {key:'pct',        label:'% Positivado',   rawKey:'_pct'},
-    {key:'mediaHist',  label:'Média Histórica', rawKey:'_mediaHist'},
-    {key:'fatTotal',   label:'Faturamento',     rawKey:'_fatTotal'},
+    {key:'nomevend',  label:'Representante'},
+    {key:'positivos', label:'Positivados'},
+    {key:'carteira',  label:'Carteira Ativa'},
+    {key:'pct',       label:'% Positivado',    rawKey:'_pct'},
+    {key:'mediaHist', label:'Média Histórica',  rawKey:'_mediaHist'},
+    {key:'fatTotal',  label:'Faturamento',      rawKey:'_fatTotal'},
     {label:'', render:(_,i)=>`<button class="btn-ver-cli" onclick="_positivadosDrillCli(${i})">Ver clientes →</button>`}
   ];
   showModal(title + ' — por Representante', rowsComTodos, COLS_REP_POSIT);
@@ -2962,8 +3017,7 @@ function _positivadosDrillCli(idx) {
   if (!_positivadosDrill) return;
   const rep = _positivadosDrill.rows[idx];
   const label = rep._isTodos ? 'Todos os Representantes' : rep.nomevend;
-  const lista = [...rep.lista].sort((a,b)=>b._valor-a._valor);
-  showModal(_positivadosDrill.title + ' — ' + label, lista, _positivadosDrill.cols);
+  showModal(_positivadosDrill.title + ' — ' + label, rep.lista, _positivadosDrill.cols);
 }
 
 function _showByRep(title, lista, cols, valorKey, repExtra) {
