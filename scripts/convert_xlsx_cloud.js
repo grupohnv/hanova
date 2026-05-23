@@ -98,7 +98,10 @@ console.log('Cad cols:', {cCod, cNome, cVend, cInativo, cCodRede, cLoja, cTipo})
 const cadCompact = rawCad
   .filter(r => {
     const inativo = cInativo ? String(r[cInativo] || '').trim().toUpperCase() : '';
-    return inativo !== 'SIM';
+    if (inativo === 'SIM') return false;
+    const codNum = parseInt(String(r[cCod] || '').trim());
+    if (!isNaN(codNum) && codNum > 0 && codNum < 1001) return false; // descarta codcli inválidos
+    return true;
   })
   .map(r => [
     String(r[cCod]     || ''),  // 0 codcli
