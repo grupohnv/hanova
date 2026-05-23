@@ -85,16 +85,27 @@ const wsCad = wbCad.Sheets[wbCad.SheetNames[0]];
 const rawCad = XLSX.utils.sheet_to_json(wsCad, { defval: null, raw: true });
 console.log('Rows:', rawCad.length);
 const hCad = rawCad.length > 0 ? Object.keys(rawCad[0]) : [];
-const cCod = normCol(hCad, ['codcli','cod_cli','codparc','codigo']);
-const cNome= normCol(hCad, ['nomecli','nome_cli','nomeparc','nome']);
-const cVend= normCol(hCad, ['nomevend','nome_vend','vendedor','representante']);
-console.log('Cad cols:', {cCod, cNome, cVend});
+const cCod    = normCol(hCad, ['codcli','cod_cli','codparc','codigo']);
+const cNome   = normCol(hCad, ['nomecli','nome_cli','nomeparc','nome']);
+const cVend   = normCol(hCad, ['nomevend','nome_vend','vendedor','representante']);
+const cInativo = normCol(hCad, ['inativo']);
+const cCodRede = normCol(hCad, ['cod_rede','codrede','rede']);
+const cLoja    = normCol(hCad, ['loja']);
+console.log('Cad cols:', {cCod, cNome, cVend, cInativo, cCodRede, cLoja});
 
-const cadCompact = rawCad.map(r => [
-  String(r[cCod] || ''),
-  String(r[cNome] || ''),
-  String(r[cVend] || '')
-]);
+// Filtrar inativos e montar cadastro compacto
+const cadCompact = rawCad
+  .filter(r => {
+    const inativo = cInativo ? String(r[cInativo] || '').trim().toUpperCase() : '';
+    return inativo !== 'SIM';
+  })
+  .map(r => [
+    String(r[cCod]     || ''),
+    String(r[cNome]    || ''),
+    String(r[cVend]    || ''),
+    String(r[cLoja]    || ''),
+    String(r[cCodRede] || '')
+  ]);
 
 // ---- PRODUTOS HANOVA ----
 console.log('Reading produtos...');
@@ -266,7 +277,7 @@ const output = {
   bonificacoes: bonifCompact, // [codcli, valor, anomes]
   meta: {
     colsDados: ['codcli','valor','anomes','descprod'],
-    colsCadastro: ['codcli','nomecli','nomevend'],
+    colsCadastro: ['codcli','nomecli','nomevend','loja','cod_rede'],
     colsMetas: ['codcli','metaValor'],
     colsBonif: ['codcli','valor','anomes'],
     geradoEm: new Date().toISOString()
