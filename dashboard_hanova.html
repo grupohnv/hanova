@@ -1729,11 +1729,35 @@ function updateDOM(k, mesRef, repLabel) {
   const COLS_INATIV = [...COLS_CLI,{key:'ultimaCompraAntes',label:'Última Compra Antes'},{key:'diasInativo',label:'Dias Inativo'},{key:'valorMes',label:'Valor no Mês'}];
   const COLS_SKUV   = [...COLS_CLI,{key:'mesPenultimo',label:'Penúlt. Pedido'},{key:'skuAntes',label:'SKU Antes'},{key:'mesUltimo',label:'Últ. Pedido'},{key:'skuDepois',label:'SKU Depois'},{key:'variacao',label:'Variação'},{key:'valorTotal',label:'Total Comprado'}];
   const _listaFatHoje = () => {
+    const _hj = new Date();
     const map={};
-    (k._base||[]).filter(r=>r._anomes===refHojeAM).forEach(r=>{map[r.codcli]=map[r.codcli]||{nomecli:r.nomecli,codcli:r.codcli,nomevend:r.nomevend,_valor:0};map[r.codcli]._valor+=r.valor;});
-    return Object.values(map).sort((a,b)=>b._valor-a._valor).map(x=>({...x,valor:fmtBRL(x._valor)}));
+    // Agrupa por codcli no mês atual
+    (k._base||[]).filter(r=>r._anomes===refHojeAM).forEach(r=>{
+      if (!map[r.codcli]) map[r.codcli]={nomecli:r.nomecli,codcli:r.codcli,nomevend:r.nomevend,_valor:0};
+      map[r.codcli]._valor+=r.valor;
+    });
+    // Calcula ticket médio e última compra a partir de toda a base
+    const cliMap = buildClienteMap(k._base||[]);
+    return Object.values(map).sort((a,b)=>b._valor-a._valor).map(x=>{
+      const cli = cliMap.get(String(x.codcli));
+      const rowsPos = cli ? cli.rows.filter(r=>r.valor>0) : [];
+      // ticket médio: média dos últimos 3 meses com compra
+      const ams = [...new Set(rowsPos.map(r=>r._anomes).filter(Boolean))].sort((a,b)=>b-a);
+      const ult3 = ams.slice(0,3);
+      const ticketMed = ult3.length ? ult3.reduce((s,am)=>s+rowsPos.filter(r=>r._anomes===am).reduce((ss,r)=>ss+r.valor,0),0)/ult3.length : 0;
+      // última compra
+      const ultDt = rowsPos.reduce((d,r)=>(r._data&&r._data>d?r._data:d), new Date(0));
+      const ultCompraFmt = ultDt.getTime()>0 ? String(ultDt.getMonth()+1).padStart(2,'0')+'/'+ultDt.getFullYear() : '—';
+      return {...x, valor:fmtBRL(x._valor), _ticketMed:ticketMed, ticketMedio:fmtBRL(ticketMed),
+        _ultCompra: ultDt.getTime()>0 ? ultDt.getTime() : 0, ultCompra: ultCompraFmt};
+    });
   };
-  const COLS_FAT_HOJ = [...COLS_CLI,{key:'valor',label:'Faturamento'}];
+  const COLS_FAT_HOJ = [
+    ...COLS_CLI,
+    {key:'valor',      label:'Faturamento',  rawKey:'_valor'},
+    {key:'ticketMedio',label:'Ticket Médio', rawKey:'_ticketMed'},
+    {key:'ultCompra',  label:'Últ. Compra',  rawKey:'_ultCompra', noRawExcel:true}
+  ];
   setClick('kFatHoje',    ()=>_showByRep('Faturamento — '+mlHoje, _listaFatHoje(), COLS_FAT_HOJ));
   setClick('kPositivados',()=>_showByRep('Positivados — '+mlHoje, _listaFatHoje(), COLS_FAT_HOJ));
   setClick('kInAtivados', ()=>_showByRep('Inativos Ativados — '+mlHoje, k.inAtivados.lista, COLS_INATIV, '_valorMesNum'));
@@ -2849,7 +2873,22 @@ function _showByRep(title, lista, cols, valorKey, repExtra) {
       avgFmt:   hasAvg ? (r._avgSum/r.total).toFixed(1) : '—'
     }))
     .sort((a,b)=> hasAvg ? (b._avgSum/b.total)-(a._avgSum/a.total) : hasVal ? b._soma-a._soma : b.total-a.total);
-  _drillRep = {title, rows, cols, valorKey, avgKey: repExtra?.avgKey};
+
+  // Linha "TODOS" no topo — agrega todos os clientes de todos os reps
+  const todosLista = lista.slice();
+  const todosRow = {
+    nomevend: '⭐ TODOS',
+    total: todosLista.length,
+    lista: todosLista,
+    _soma: todosLista.reduce((s,r)=> s+(typeof r[valorKey]==='number'?r[valorKey]:0), 0),
+    _avgSum: todosLista.reduce((s,r)=> s+(repExtra?.avgKey&&typeof r[repExtra.avgKey]==='number'?r[repExtra.avgKey]:0), 0),
+    _isTodos: true
+  };
+  todosRow.valorFmt = hasVal ? fmtBRL(todosRow._soma) : '—';
+  todosRow.avgFmt   = hasAvg ? (todosRow._avgSum/Math.max(todosRow.total,1)).toFixed(1) : '—';
+  const rowsComTodos = [todosRow, ...rows];
+
+  _drillRep = {title, rows: rowsComTodos, cols, valorKey, avgKey: repExtra?.avgKey};
   const drillCols = [
     {key:'nomevend', label:'Representante'},
     {key:'total', label:'Clientes'},
@@ -2857,7 +2896,7 @@ function _showByRep(title, lista, cols, valorKey, repExtra) {
     ...(hasVal ? [{key:'valorFmt', label:'Valor Total'}] : []),
     {label:'', render:(_,i)=>`<button class="btn-ver-cli" onclick="_drillToClients(${i})">Ver clientes →</button>`}
   ];
-  showModal(title + ' — por Representante', rows, drillCols);
+  showModal(title + ' — por Representante', rowsComTodos, drillCols);
 }
 
 function _drillToClients(idx) {
@@ -2867,7 +2906,8 @@ function _drillToClients(idx) {
   const lista = sortKey
     ? [...rep.lista].sort((a,b)=>(b[sortKey]||0)-(a[sortKey]||0))
     : rep.lista;
-  showModal(_drillRep.title + ' — ' + rep.nomevend, lista, _drillRep.cols);
+  const label = rep._isTodos ? 'Todos os Representantes' : rep.nomevend;
+  showModal(_drillRep.title + ' — ' + label, lista, _drillRep.cols);
 }
 
 // ── Faturamento + Bonificação por rep → clientes ──────────────────────────
