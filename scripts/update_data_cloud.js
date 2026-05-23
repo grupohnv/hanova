@@ -9,18 +9,14 @@ const b64  = fs.readFileSync(b64Path, 'utf8').trim();
 const meta = JSON.parse(fs.readFileSync(jsonPath, 'utf8')).meta;
 
 const geradoEm = new Date(meta.geradoEm).toLocaleDateString('pt-BR', {
-  day: '2-digit', month: '2-digit', year: 'numeric',
-  hour: '2-digit', minute: '2-digit'
+  day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'
 });
 
-// ── Remove ALL existing embedded-data blocks (handles duplicate injections)
-// Each block starts with the comment marker and ends before "// Drag-and-drop support"
 const blockStart = /\/\* ═+\s*EMBEDDED DATA[\s\S]*?document\.addEventListener\('DOMContentLoaded', loadEmbeddedData\);\s*/g;
 const cleaned = html.replace(blockStart, '');
-const removedCount = (html.match(blockStart) || []).length;
-console.log(`Removed ${removedCount} existing data block(s)`);
+const removedCount = (html.match(blockStart)||[]).length;
+console.log('Removed ' + removedCount + ' existing data block(s)');
 
-// ── Build new block
 const newBlock = `/* ══════════════════════════════════════════════════
    EMBEDDED DATA (auto-load, sem upload)
    Gerado em: ${geradoEm}
@@ -45,14 +41,11 @@ async function loadEmbeddedData() {
     const data = JSON.parse(new TextDecoder().decode(buf));
 
     cadastroMap.clear();
-    data.cadastro.forEach(([cod,nome,vend])=>{ if(cod) cadastroMap.set(String(cod),{nomecli:nome||'',nomevend:vend||''}); });
-
+    data.cadastro.forEach(([cod,nome,vend,loja,codRede,tipo])=>{ if(cod) cadastroMap.set(String(cod),{nomecli:nome||'',nomevend:vend||'',loja:loja||'',cod_rede:codRede||'',tipo:(tipo||'').toUpperCase()}); });
     produtosAtivos.clear();
     data.produtos.forEach(p=>{ if(p) produtosAtivos.add(String(p).trim().toUpperCase()); });
-
     metaMap.clear();
     (data.metas||[]).forEach(function(r){ const c=String(r[0]||'').trim(),v=typeof r[1]==='number'?r[1]:0; if(c&&v>0) metaMap.set(c,(metaMap.get(c)||0)+v); });
-
     dadosBase = data.dados.map(([codcli,valor,anomes,descprod])=>{
       const key=String(codcli||'');
       const cad=cadastroMap.get(key)||{nomecli:'',nomevend:'N/D'};
@@ -62,7 +55,6 @@ async function loadEmbeddedData() {
         _data:new Date(ano,mes,0), _anomes:anomes,
         descprod:String(descprod||'').trim().toUpperCase()};
     });
-
     bonifBase = (data.bonificacoes||[]).map(([codcli,valor,anomes])=>{
       const key=String(codcli||'');
       const cad=cadastroMap.get(key)||{nomecli:'',nomevend:'N/D'};
@@ -71,7 +63,6 @@ async function loadEmbeddedData() {
         valor:typeof valor==='number'?valor:0,
         _data:new Date(ano,mes,0), _anomes:anomes};
     });
-
     buildFilters();
     document.getElementById('uploadScreen').style.display='none';
     document.getElementById('loadingOverlay').style.display='none';
@@ -90,13 +81,11 @@ async function loadEmbeddedData() {
 document.addEventListener('DOMContentLoaded', loadEmbeddedData);
 `;
 
-// ── Inject before "// Drag-and-drop support"
 if (!cleaned.includes('// Drag-and-drop support')) {
-  console.error('ERROR: anchor "// Drag-and-drop support" not found!');
+  console.error('ERROR: anchor not found!');
   process.exit(1);
 }
 const out = cleaned.replace('// Drag-and-drop support', newBlock + '\n// Drag-and-drop support');
-
 fs.writeFileSync(htmlPath, out, 'utf8');
 const size = fs.statSync(htmlPath).size;
-console.log(`Done! HTML: ${(size/1024/1024).toFixed(2)} MB  |  Data: ${geradoEm}`);
+console.log('Done! HTML: ' + (size/1024/1024).toFixed(2) + ' MB | Data: ' + geradoEm);
