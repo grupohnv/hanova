@@ -1320,16 +1320,18 @@ function cadGrupoKey(cad, codcli) {
   return (cad && cad.tipo === 'SIM' && cad.cod_rede) ? cad.cod_rede : String(codcli);
 }
 
-// Mapa consolidado: filiais de rede (tipo=SIM) são agrupadas num único entry por cod_rede
+// Mapa consolidado: filiais de rede (tipo=SIM) são agrupadas num único entry por cod_rede.
+// Clientes ausentes do cadastroMap (inativos ou desconhecidos) são ignorados.
 function buildClienteMapConsolidado(base) {
   const m = new Map();
   base.forEach(r => {
     const cad = cadastroMap.get(String(r.codcli));
-    const key = cad ? cadGrupoKey(cad, r.codcli) : String(r.codcli);
-    const isRede = cad && cad.tipo === 'SIM' && cad.cod_rede;
-    const nomeDisplay = (isRede && cad.loja) ? cad.loja : (r.nomecli || r.codcli);
+    if (!cad) return; // cliente inativo ou não cadastrado — não aparece nos cards de clientes
+    const key = cadGrupoKey(cad, r.codcli);
+    const isRede = cad.tipo === 'SIM' && cad.cod_rede;
+    const nomeDisplay = (isRede && cad.loja) ? cad.loja : (r.nomecli || cad.nomecli || r.codcli);
     if (!m.has(key)) {
-      m.set(key, { codcli: key, nomecli: nomeDisplay, nomevend: r.nomevend || 'N/D', rows: [] });
+      m.set(key, { codcli: key, nomecli: nomeDisplay, nomevend: cad.nomevend || r.nomevend || 'N/D', rows: [] });
     }
     m.get(key).rows.push(r);
   });
