@@ -326,8 +326,10 @@ tr:hover td{background:rgba(255,255,255,.03)}
 
   <div id="filterBar">
     <div class="filter-group">
-      <label>📅 Mês de referência</label>
-      <select class="filter-select" id="filtroMes" onchange="applyFilters()"></select>
+      <label>📅 Período</label>
+      <select class="filter-select" id="filtroMesInicio" onchange="applyFilters()"></select>
+      <span style="color:rgba(201,168,76,0.6);padding:0 6px;font-size:12px;align-self:center">até</span>
+      <select class="filter-select" id="filtroMesFim" onchange="applyFilters()"></select>
     </div>
     <div class="filter-group">
       <label>👤 Representante</label>
@@ -451,8 +453,19 @@ tr:hover td{background:rgba(255,255,255,.03)}
     </div>
 
 
+    <!-- CLIENTES NOVOS ENXOVAL -->
+    <div class="sec-title">🛍 Enxoval</div>
+    <div class="g5">
+      <div class="card kpi-card kg" id="cardNovosEnxoval" style="padding:12px 14px;cursor:pointer;display:none">
+        <div class="ct">Clientes Novos — Enxoval 🛍</div>
+        <div class="cv" id="kNovosEnxoval">—</div>
+        <div class="cs" id="kNovosEnxovalSub"></div>
+        <div class="cs" id="kNovosEnxovalBonif" style="margin-top:4px;font-size:0.78rem;color:#f59e0b"></div>
+      </div>
+    </div>
+
     <!-- REALIZADO MÊS ATUAL -->
-    <div class="sec-title">🎯 Realizado — Mês Atual</div>
+    <div class="sec-title" id="secRealizadoTitle">🎯 Realizado — Mês Atual</div>
     <div class="g3" id="secRealizado">
       <div class="card kpi-card kgr">
         <div class="ct">Faturamento Mês Atual 💰</div>
@@ -909,10 +922,16 @@ function buildFilters() {
   dadosBase.forEach(r => { if (r._anomes) mesesSet.add(r._anomes); });
   const meses = Array.from(mesesSet).sort((a,b)=>a-b);
 
-  const selMes = document.getElementById('filtroMes');
-  selMes.innerHTML = meses.map(am => `<option value="${am}">${anoMesToLabel(am)}</option>`).join('');
-  // Default to last
-  if (meses.length) selMes.value = meses[meses.length-1];
+  const opts = meses.map(am => `<option value="${am}">${anoMesToLabel(am)}</option>`).join('');
+  const selInicio = document.getElementById('filtroMesInicio');
+  const selFim    = document.getElementById('filtroMesFim');
+  if (selInicio) selInicio.innerHTML = opts;
+  if (selFim)    selFim.innerHTML    = opts;
+  // Default: ambos no último mês (mesmo comportamento anterior)
+  if (meses.length) {
+    if (selInicio) selInicio.value = meses[meses.length-1];
+    if (selFim)    selFim.value    = meses[meses.length-1];
+  }
 
   // Collect reps
   const repsSet = new Set(['TODOS']);
@@ -925,21 +944,22 @@ function buildFilters() {
    MAIN FILTER + COMPUTE
 ══════════════════════════════════════════════════ */
 function applyFilters() {
-  const mesVal   = parseInt(document.getElementById('filtroMes').value);
-  const repVal   = document.getElementById('filtroRep').value;
-  const mesRef   = { ano: Math.floor(mesVal/100), mes: mesVal%100 };
-  const meta     = parseFloat(document.getElementById('metaInput').value) || 947000;
+  const mesInicio = parseInt(document.getElementById('filtroMesInicio').value);
+  const mesFim    = parseInt(document.getElementById('filtroMesFim').value);
+  const startAM   = Math.min(mesInicio, mesFim);
+  const endAM     = Math.max(mesInicio, mesFim);
+  const repVal    = document.getElementById('filtroRep').value;
+  const mesRef    = { ano: Math.floor(endAM/100), mes: endAM%100 };
+  const meta      = parseFloat(document.getElementById('metaInput').value) || 947000;
 
-  // Filter data by rep
   const base = repVal === 'TODOS' ? dadosBase : dadosBase.filter(r => r.nomevend === repVal);
   const bonifFiltrado = repVal === 'TODOS' ? bonifBase : bonifBase.filter(r => r.nomevend === repVal);
   window._bonifFiltradoAtual = bonifFiltrado;
 
-  // Quando um rep específico está selecionado, filtrar meta também por ele
   const repAllowed = (repVal && repVal !== 'TODOS') ? new Set([repVal.toUpperCase()]) : null;
-  const kpis = computeKPIs(base, mesRef, meta, repAllowed, bonifFiltrado);
+  const kpis = computeKPIs(base, mesRef, meta, repAllowed, bonifFiltrado, startAM, endAM);
   currentKpis = kpis;
-  updateDOM(kpis, mesRef, repVal);
+  updateDOM(kpis, mesRef, repVal, startAM, endAM);
   updateCharts(kpis, mesRef);
 }
 
@@ -1016,38 +1036,116 @@ function calcRepFoco(clienteMap, lMenosTrinta, refDate) {
     .slice(0,6);
 }
 
-function computeKPIs(base, mesRef, meta, allowedReps, bonif) {
-  const refAM  = mesRef.ano*100 + mesRef.mes;
-  const antAM  = prevAnoMes(refAM, 1);
-  const anoAntAM = (mesRef.ano-1)*100 + mesRef.mes;
+function calcClientesNovosEnxoval(base, bonif, startAM, endAM) {
+  // Para cada codcli, encontra o _anomes da primeira compra no histórico completo de `base`
+  const firstBuyAM  = new Map(); // codcli → menor _anomes
+  const firstBuyDt  = new Map(); // codcli → Date da primeira compra
+  base.forEach(r => {
+    const k = String(r.codcli);
+    if (!firstBuyAM.has(k) || r._anomes < firstBuyAM.get(k)) {
+      firstBuyAM.set(k, r._anomes);
+      firstBuyDt.set(k, r._data || new Date(0));
+    }
+  });
 
-  // ── FATURAMENTO ──────────────────────────────
-  const fatAtual   = sumValorAM(base, refAM);
-  const fatAnt     = sumValorAM(base, antAM);
-  const fatAnoAnt  = sumValorAM(base, anoAntAM);
+  // Para bonif: menor _anomes por codcli
+  const _b = bonif || [];
+  const firstBonifAM = new Map();
+  _b.forEach(r => {
+    const k = String(r.codcli);
+    if (!firstBonifAM.has(k) || r._anomes < firstBonifAM.get(k)) firstBonifAM.set(k, r._anomes);
+  });
 
-  // ── BONIFICAÇÕES ─────────────────────────────
+  const novosClientes = [], somenteBonif = [];
+
+  // Clientes com primeira compra no período
+  firstBuyAM.forEach((am, codcli) => {
+    if (am < startAM || am > endAM) return;
+    const cad = cadastroMap.get(codcli);
+    if (!cad) return;
+    const rows = base.filter(r => String(r.codcli) === codcli && r._anomes === am);
+    const _fatVenda = rows.reduce((s,r) => s+r.valor, 0);
+    const dt = firstBuyDt.get(codcli) || new Date(0);
+    const dtFmt = dt.getTime() > 0 ? String(dt.getDate()).padStart(2,'0')+'/'+String(dt.getMonth()+1).padStart(2,'0')+'/'+dt.getFullYear() : anoMesToLabel(am);
+    // Bonif: conta apenas se primeiro bonif for no mesmo mês da primeira compra
+    const bam = firstBonifAM.get(codcli);
+    let _fatBonif = 0;
+    if (bam === am) {
+      const bRows = _b.filter(r => String(r.codcli) === codcli && r._anomes === bam);
+      _fatBonif = bRows.reduce((s,r) => s+r.valor, 0);
+    }
+    novosClientes.push({
+      codcli, nomecli: cad.nomecli||rows[0]?.nomecli||codcli,
+      nomevend: cad.nomevend||'N/D',
+      _fatVenda, fatVenda: fmtBRL(_fatVenda),
+      _fatBonif, fatBonif: _fatBonif>0 ? fmtBRL(_fatBonif) : '—',
+      primCompra: dtFmt, _primCompraAM: am
+    });
+  });
+
+  // Clientes apenas com bonif (sem compra ou primeira compra fora do período)
+  firstBonifAM.forEach((bam, codcli) => {
+    if (bam < startAM || bam > endAM) return;
+    const jaIncluso = firstBuyAM.has(codcli) && firstBuyAM.get(codcli) >= startAM && firstBuyAM.get(codcli) <= endAM;
+    if (jaIncluso) return;
+    const cad = cadastroMap.get(codcli);
+    if (!cad) return;
+    const bRows = _b.filter(r => String(r.codcli) === codcli && r._anomes === bam);
+    const _fatBonif = bRows.reduce((s,r) => s+r.valor, 0);
+    somenteBonif.push({
+      codcli, nomecli: cad.nomecli||bRows[0]?.nomecli||codcli,
+      nomevend: cad.nomevend||'N/D',
+      _fatVenda: 0, fatVenda: '—',
+      _fatBonif, fatBonif: fmtBRL(_fatBonif),
+      primCompra: anoMesToLabel(bam)+' (bonif)', _primCompraAM: bam
+    });
+  });
+
+  const totalFatVenda = novosClientes.reduce((s,c) => s+c._fatVenda, 0);
+  const totalFatBonif = [...novosClientes,...somenteBonif].reduce((s,c) => s+c._fatBonif, 0);
+  return {
+    totalClientes: novosClientes.length + somenteBonif.length,
+    totalFatVenda, totalFatBonif,
+    novosClientes: novosClientes.sort((a,b) => b._fatVenda-a._fatVenda),
+    somenteBonif:  somenteBonif.sort((a,b) => b._fatBonif-a._fatBonif),
+    todos: [...novosClientes, ...somenteBonif]
+  };
+}
+
+function computeKPIs(base, mesRef, meta, allowedReps, bonif, startAM, endAM) {
+  const refAM  = mesRef.ano*100 + mesRef.mes; // = endAM
+  startAM = startAM || refAM;
+  endAM   = endAM   || refAM;
+
+  // ── FATURAMENTO — period-aware ────────────────
+  const _prev = prevEquivPeriod(startAM, endAM);
+  const _lyr  = samePerioLastYear(startAM, endAM);
+  const fatAtual   = sumValorPeriodo(base, startAM, endAM);
+  const fatAnt     = sumValorPeriodo(base, _prev.s, _prev.e);
+  const fatAnoAnt  = sumValorPeriodo(base, _lyr.s, _lyr.e);
+  const antAM      = _prev.e; // mantido para labels de comparação
+
+  // ── BONIFICAÇÕES — period-aware ───────────────
   const _bonif = bonif || [];
-  const bonifAtual   = sumValorAM(_bonif, refAM);
-  const bonifAnt     = sumValorAM(_bonif, antAM);
-  const bonifPctFat  = fatAtual   > 0 ? +(bonifAtual / fatAtual * 100).toFixed(1) : 0;
-  const bonifPctAnt  = fatAnt     > 0 ? +(bonifAnt   / fatAnt   * 100).toFixed(1) : 0;
-  // ── FATURAMENTO MENSAL (últimos 13 meses) ────
+  const bonifAtual   = sumValorPeriodo(_bonif, startAM, endAM);
+  const bonifAnt     = sumValorPeriodo(_bonif, _prev.s, _prev.e);
+  const bonifPctFat  = fatAtual > 0 ? +(bonifAtual / fatAtual * 100).toFixed(1) : 0;
+  const bonifPctAnt  = fatAnt   > 0 ? +(bonifAnt   / fatAnt   * 100).toFixed(1) : 0;
+
+  // ── FATURAMENTO MENSAL (últimos 13 meses a partir de endAM) ─
   const fatMensal = [];
   const bonifMensal = [];
   for (let i = 12; i >= 0; i--) {
-    const am = prevAnoMes(refAM, i);
-    const fatV = sumValorAM(base, am);
-    const bonV = sumValorAM(_bonif, am);
-    fatMensal.push({ label: anoMesToLabel(am), valor: fatV, am });
-    bonifMensal.push({ label: anoMesToLabel(am), valor: bonV, am });
+    const am = prevAnoMes(endAM, i);
+    fatMensal.push({ label: anoMesToLabel(am), valor: sumValorAM(base, am), am });
+    bonifMensal.push({ label: anoMesToLabel(am), valor: sumValorAM(_bonif, am), am });
   }
 
-  // ── CLIENTES POR CÓDIGO (histórico) — consolidado por rede quando tipo=SIM ──
+  // ── CLIENTES POR CÓDIGO (histórico completo) — consolidado por rede ──
   const clienteMap = buildClienteMapConsolidado(base);
 
   // ── INATIVOS 90+ ─────────────────────────────
-  const refDate = new Date(mesRef.ano, mesRef.mes, 0); // last day of ref month
+  const refDate = new Date(mesRef.ano, mesRef.mes, 0);
   const inativos = calcInativos(clienteMap, refDate);
 
   // ── CLIENTES QUENTES ─────────────────────────
@@ -1064,27 +1162,27 @@ function computeKPIs(base, mesRef, meta, allowedReps, bonif) {
   const skuStats = calcSku(clienteMap);
 
   // ── COMPORTAMENTO ─────────────────────────────
-  const comp = calcComportamento(clienteMap, refAM);
+  const comp = calcComportamento(clienteMap, endAM);
 
-  // ── REALIZADO MÊS ATUAL ───────────────────────
-  const hoje = new Date();
-  const mesHoje = { ano: hoje.getFullYear(), mes: hoje.getMonth() + 1 };
-  const refHojeAM = mesHoje.ano * 100 + mesHoje.mes;
-  const fatHoje     = sumValorAM(base, refHojeAM);
-  const inAtivados  = calcInativosAtivados(clienteMap, mesHoje);
-  const dimCiclo    = calcDiminuiramCiclo(clienteMap);
-  const aumSku      = calcAumentaramSku(clienteMap);
-  const positivados = calcPositivados(base, refHojeAM);
+  // ── REALIZADO — período selecionado ───────────
+  const fatHoje    = sumValorPeriodo(base, startAM, endAM);
+  const inAtivados = calcInativosAtivados(clienteMap, startAM, endAM);
+  const dimCiclo   = calcDiminuiramCiclo(clienteMap);
+  const aumSku     = calcAumentaramSku(clienteMap);
+  const positivados = calcPositivados(base, startAM, endAM);
 
   // ── TOP / BOTTOM PRODUTOS ─────────────────────
   const topProd = calcTopProd(base);
 
-  // ── REP REALIZADO ─────────────────────────────
-  const repReal = calcRepReal(base, refAM);
+  // ── REP REALIZADO — period-aware ──────────────
+  const repReal = calcRepReal(base, startAM, endAM);
 
   _clienteMapGlobal = clienteMap;
-  const metaCli  = calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps);
+  const metaCli   = calcMetaPorCliente(base, metaMap, endAM, clienteMap, allowedReps);
   const exQuentes = calcExQuentes(clienteMap, mesRef);
+
+  // ── CLIENTES NOVOS ENXOVAL ────────────────────
+  const novosEnxoval = calcClientesNovosEnxoval(base, _bonif, startAM, endAM);
 
   return {
     fatAtual, fatAnt, fatAnoAnt, meta,
@@ -1097,6 +1195,7 @@ function computeKPIs(base, mesRef, meta, allowedReps, bonif) {
     mixMenor30PorRep: calcMixMenor30PorRep(skuStats.lMenosTrinta),
     metaCli, exQuentes,
     bonifAtual, bonifAnt, bonifPctFat, bonifPctAnt, bonifMensal,
+    novosEnxoval, startAM, endAM,
     _base: base,
   };
 }
@@ -1220,21 +1319,20 @@ function calcExQuentes(clienteMap, mesRef) {
 }
 
 
-function calcInativosAtivados(clienteMap, mesRef) {
-  const refAM = mesRef.ano*100+mesRef.mes;
-  const startRef = new Date(mesRef.ano, mesRef.mes-1, 1);
+function calcInativosAtivados(clienteMap, startAM, endAM) {
+  const startDate = new Date(Math.floor(startAM/100), startAM%100-1, 1);
   const lista = [];
   clienteMap.forEach(cli => {
-    if (!cli.rows.some(r => r._anomes === refAM)) return;
-    const prev = cli.rows.filter(r => r._anomes < refAM);
+    if (!cli.rows.some(r => r._anomes >= startAM && r._anomes <= endAM)) return;
+    const prev = cli.rows.filter(r => r._anomes < startAM);
     if (!prev.length) return;
     const lastDate = prev.reduce((d,r) => r._data > d ? r._data : d, new Date(0));
-    const dias = Math.round((startRef - lastDate) / 86400000);
+    const dias = Math.round((startDate - lastDate) / 86400000);
     if (dias > 90) {
-      const valorMes = cli.rows.filter(r=>r._anomes===refAM).reduce((s,r)=>s+r.valor,0);
+      const valorPeriodo = cli.rows.filter(r=>r._anomes>=startAM&&r._anomes<=endAM).reduce((s,r)=>s+r.valor,0);
       lista.push({ nomecli:cli.nomecli||cli.codcli, codcli:cli.codcli, nomevend:cli.nomevend,
         ultimaCompraAntes: lastDate.toLocaleDateString('pt-BR'), diasInativo: dias,
-        _valorMesNum: valorMes, valorMes: fmtBRL(valorMes) });
+        _valorMesNum: valorPeriodo, valorMes: fmtBRL(valorPeriodo) });
     }
   });
   lista.sort((a,b)=>b._valorMesNum-a._valorMesNum);
@@ -1287,10 +1385,10 @@ function calcAumentaramSku(clienteMap) {
   return { total:lista.length, lista };
 }
 
-function calcPositivados(base, refAM) {
+function calcPositivados(base, startAM, endAM) {
   const m = buildClienteMapConsolidado(base);
   let positivos = 0;
-  m.forEach(cli => { if (cli.rows.some(r => r._anomes === refAM)) positivos++; });
+  m.forEach(cli => { if (cli.rows.some(r => r._anomes >= startAM && r._anomes <= endAM)) positivos++; });
   const carteira = m.size;
   return { positivados: positivos, carteira, pct: carteira?(positivos/carteira*100).toFixed(1):'0' };
 }
@@ -1306,6 +1404,21 @@ function prevAnoMes(am, n) {
 
 function sumValorAM(base, am) {
   return base.filter(r => r._anomes === am).reduce((s,r) => s + r.valor, 0);
+}
+function sumValorPeriodo(base, s, e) {
+  return base.filter(r => r._anomes >= s && r._anomes <= e).reduce((acc,r) => acc+r.valor, 0);
+}
+function periodLabel(s, e) {
+  return s === e ? anoMesToLabel(s) : anoMesToLabel(s) + ' – ' + anoMesToLabel(e);
+}
+function prevEquivPeriod(s, e) {
+  const len = (Math.floor(e/100)-Math.floor(s/100))*12 + (e%100)-(s%100) + 1;
+  const pe = prevAnoMes(s, 1);
+  const ps = prevAnoMes(pe, len-1);
+  return { s:ps, e:pe };
+}
+function samePerioLastYear(s, e) {
+  return { s:(Math.floor(s/100)-1)*100+(s%100), e:(Math.floor(e/100)-1)*100+(e%100) };
 }
 
 function buildClienteMap(base) {
@@ -1573,9 +1686,9 @@ function calcTopProd(base) {
   return { top10: ativos.slice(0,10), bot10: ativos.slice(-10).reverse() };
 }
 
-function calcRepReal(base, refAM) {
+function calcRepReal(base, startAM, endAM) {
   const map={};
-  base.filter(r=>r._anomes===refAM).forEach(r=>{
+  base.filter(r=>r._anomes>=startAM&&r._anomes<=endAM).forEach(r=>{
     const v=r.nomevend||'N/D';
     map[v]=(map[v]||0)+r.valor;
   });
@@ -1587,10 +1700,11 @@ function calcRepReal(base, refAM) {
 ══════════════════════════════════════════════════ */
 const meses_pt = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
-function updateDOM(k, mesRef, repLabel) {
-  const ml = `${meses_pt[mesRef.mes]} / ${mesRef.ano}`;
-  const _hoje = new Date();
-  const refHojeAM = _hoje.getFullYear() * 100 + (_hoje.getMonth() + 1);
+function updateDOM(k, mesRef, repLabel, startAM, endAM) {
+  startAM = startAM || mesRef.ano*100+mesRef.mes;
+  endAM   = endAM   || mesRef.ano*100+mesRef.mes;
+  const ml = periodLabel(startAM, endAM);
+  const refHojeAM = endAM; // usa fim do período selecionado como referência de "hoje"
 
   // FATURAMENTO
   set('kFatAtual', fmtBRL(k.fatAtual));
@@ -1741,24 +1855,28 @@ function updateDOM(k, mesRef, repLabel) {
     `Faturamento Mensal${repLabel!=='TODOS' ? ' · '+repLabel : ''}`;
 
 
-  // FATURAMENTO MÊS ATUAL
-  const mlHoje = anoMesToLabel(refHojeAM);
+  // Atualiza título da seção Realizado
+  { const el = document.getElementById('secRealizadoTitle');
+    if (el) el.textContent = '🎯 Realizado — ' + ml; }
+
+  // FATURAMENTO DO PERÍODO (seção Realizado)
+  const mlHoje = ml; // alias para compatibilidade com código abaixo
   set('kFatHoje', fmtBRL(k.fatHoje));
-  set('kFatHojeSub', 'faturado em ' + mlHoje);
+  set('kFatHojeSub', 'faturado em ' + ml);
   const fatHojeVsAnt = k.fatHoje > 0 && k.fatAnt > 0 ? ((k.fatHoje - k.fatAnt) / k.fatAnt * 100).toFixed(1) : null;
   document.getElementById('kFatHojeBadge').innerHTML = fatHojeVsAnt !== null
-    ? `<span class="cbadge ${fatHojeVsAnt >= 0 ? 'cup' : 'cdn'}">${fatHojeVsAnt >= 0 ? '▲' : '▼'} ${Math.abs(fatHojeVsAnt)}% vs mês anterior</span>` : '';
+    ? `<span class="cbadge ${fatHojeVsAnt >= 0 ? 'cup' : 'cdn'}">${fatHojeVsAnt >= 0 ? '▲' : '▼'} ${Math.abs(fatHojeVsAnt)}% vs período anterior</span>` : '';
 
   // POSITIVADOS
   set('kPositivados', k.positivados.positivados + ' / ' + k.positivados.carteira);
-  set('kPositivadosSub', k.positivados.pct + '% da carteira compraram em ' + mlHoje);
+  set('kPositivadosSub', k.positivados.pct + '% da carteira compraram em ' + ml);
   document.getElementById('kPositivadosProg').innerHTML =
     `<div class="prog"><div class="prog-lbl"><span>0</span><span>${k.positivados.carteira}</span></div>
     <div class="prog-bar"><div class="prog-fill gr" style="width:${Math.min(parseFloat(k.positivados.pct),100)}%"></div></div></div>`;
 
   // INATIVOS ATIVADOS
   set('kInAtivados', k.inAtivados.total);
-  set('kInAtivadosSub', 'clientes inativos que compraram em ' + mlHoje);
+  set('kInAtivadosSub', 'clientes inativos que compraram em ' + ml);
   document.getElementById('kInAtivadosBadge').innerHTML = k.inAtivados.total>0
     ? '<span class="cbadge cup">▲ Reativações no mês</span>' : '';
 
@@ -1776,10 +1894,9 @@ function updateDOM(k, mesRef, repLabel) {
   const COLS_INATIV = [...COLS_CLI,{key:'ultimaCompraAntes',label:'Última Compra Antes'},{key:'diasInativo',label:'Dias Inativo'},{key:'valorMes',label:'Valor no Mês'}];
   const COLS_SKUV   = [...COLS_CLI,{key:'mesPenultimo',label:'Penúlt. Pedido'},{key:'skuAntes',label:'SKU Antes'},{key:'mesUltimo',label:'Últ. Pedido'},{key:'skuDepois',label:'SKU Depois'},{key:'variacao',label:'Variação'},{key:'valorTotal',label:'Total Comprado'}];
   const _listaFatHoje = () => {
-    // Consolida redes antes de calcular — usa buildClienteMapConsolidado
     const cliMc = buildClienteMapConsolidado(k._base||[]);
     return [...cliMc.values()].map(c => {
-      const _valor = c.rows.filter(r=>r._anomes===refHojeAM).reduce((s,r)=>s+r.valor,0);
+      const _valor = c.rows.filter(r=>r._anomes>=startAM&&r._anomes<=endAM).reduce((s,r)=>s+r.valor,0);
       if (_valor <= 0) return null;
       const rowsPos = c.rows.filter(r=>r.valor>0);
       const ams = [...new Set(rowsPos.map(r=>r._anomes).filter(Boolean))].sort((a,b)=>b-a);
@@ -1798,11 +1915,28 @@ function updateDOM(k, mesRef, repLabel) {
     {key:'ticketMedio',label:'Ticket Médio', rawKey:'_ticketMed'},
     {key:'ultCompra',  label:'Últ. Compra',  rawKey:'_ultCompra', noRawExcel:true}
   ];
-  setClick('kFatHoje',    ()=>_showByRep('Faturamento — '+mlHoje, _listaFatHoje(), COLS_FAT_HOJ));
-  setClick('kPositivados',()=>_showPositivados(mlHoje, refHojeAM, k._base||[]));
+  setClick('kFatHoje',    ()=>_showByRep('Faturamento — '+ml, _listaFatHoje(), COLS_FAT_HOJ));
+  setClick('kPositivados',()=>_showPositivados(ml, startAM, endAM, k._base||[]));
   setClick('kInAtivados', ()=>_showByRep('Inativos Ativados — '+mlHoje, k.inAtivados.lista, COLS_INATIV, '_valorMesNum'));
   setClick('kDimCiclo',   ()=>_showByRep('Aceleraram Ciclo de Compra', k.dimCiclo.lista, COLS_CICV, '_valorTotal'));
   setClick('kAumSku',     ()=>_showByRep('Aumentaram SKU', k.aumSku.lista, COLS_SKUV, '_valorTotal'));
+
+  // CLIENTES NOVOS ENXOVAL
+  { const ne = k.novosEnxoval;
+    const elCard = document.getElementById('cardNovosEnxoval');
+    if (ne && elCard) {
+      if (ne.totalClientes > 0 || ne.totalFatVenda > 0) {
+        elCard.style.display = '';
+        set('kNovosEnxoval', ne.totalClientes + ' clientes');
+        set('kNovosEnxovalSub', fmtBRL(ne.totalFatVenda) + ' em fat. enxoval');
+        const elB = document.getElementById('kNovosEnxovalBonif');
+        if (elB) elB.textContent = ne.totalFatBonif > 0 ? '🎁 Bonif enxoval: ' + fmtBRL(ne.totalFatBonif) : '';
+        setClick('cardNovosEnxoval', () => _showNovosEnxoval(k, startAM, endAM));
+      } else {
+        elCard.style.display = 'none';
+      }
+    }
+  }
 
   updateDiretorPanel(k);
 
@@ -2845,16 +2979,19 @@ function lockRepFilter() {
 const _origApplyFilters = window.applyFilters;
 window.applyFilters = function applyFilters() {
   if (currentUser && currentUser.nomevend) {
-    const mesVal = parseInt(document.getElementById('filtroMes').value);
-    const mesRef = { ano: Math.floor(mesVal/100), mes: mesVal%100 };
-    const meta   = parseFloat(document.getElementById('metaInput').value) || 947000;
-    const allowed = new Set(currentUser.nomevend.map(v => v.toUpperCase()));
+    const mesInicio = parseInt(document.getElementById('filtroMesInicio').value);
+    const mesFim    = parseInt(document.getElementById('filtroMesFim').value);
+    const startAM   = Math.min(mesInicio, mesFim);
+    const endAM     = Math.max(mesInicio, mesFim);
+    const mesRef    = { ano: Math.floor(endAM/100), mes: endAM%100 };
+    const meta      = parseFloat(document.getElementById('metaInput').value) || 947000;
+    const allowed   = new Set(currentUser.nomevend.map(v => v.toUpperCase()));
     const base = dadosBase.filter(r => allowed.has((r.nomevend||'').toUpperCase()));
     const bonifFiltrado = bonifBase.filter(r => allowed.has((r.nomevend||'').toUpperCase()));
     window._bonifFiltradoAtual = bonifFiltrado;
-    const kpis = computeKPIs(base, mesRef, meta, allowed, bonifFiltrado);
+    const kpis = computeKPIs(base, mesRef, meta, allowed, bonifFiltrado, startAM, endAM);
     currentKpis = kpis;
-    updateDOM(kpis, mesRef, currentUser.label);
+    updateDOM(kpis, mesRef, currentUser.label, startAM, endAM);
     updateCharts(kpis, mesRef);
     return;
   }
@@ -2881,7 +3018,8 @@ let _drillRep = null;
 
 // ── Positivados vs Carteira — drill por representante ─────────────────────────
 let _positivadosDrill = null;
-function _showPositivados(mlHoje, refAM, base) {
+function _showPositivados(mlHoje, startAM, endAM, base) {
+  const refAM = endAM; // compatibilidade interna
   const title = 'Positivados vs Carteira — ' + mlHoje;
   const todosAMs = [...new Set(base.map(r=>r._anomes).filter(Boolean))].sort();
   const cliMapAll = buildClienteMap(base);
@@ -2912,8 +3050,8 @@ function _showPositivados(mlHoje, refAM, base) {
       grupos.get(key).codclis.push(codcli);
     });
 
-    // Somar faturamento no mês de referência e calcular ticket + última compra
-    base.filter(r => r._anomes === refAM).forEach(r => {
+    // Somar faturamento no período e calcular ticket + última compra
+    base.filter(r => r._anomes >= startAM && r._anomes <= endAM).forEach(r => {
       const cad = cadastroMap.get(String(r.codcli));
       const key = cad ? cadGrupoKey(cad, r.codcli) : String(r.codcli);
       if (grupos.has(key)) grupos.get(key)._valor += r.valor;
@@ -2961,7 +3099,7 @@ function _showPositivados(mlHoje, refAM, base) {
     carteiraRepMap[rep].add(cadGrupoKey(cad, codcli));
   });
 
-  const todosAMsHist = todosAMs.filter(am => am < refAM);
+  const todosAMsHist = todosAMs.filter(am => am < startAM);
 
   function calcPosHist(rep) {
     const cart = carteiraRepMap[rep];
@@ -2984,7 +3122,7 @@ function _showPositivados(mlHoje, refAM, base) {
     const carteira = cartConjunto.size;
     // positivados no mês: quantos grupos compraram
     const positSet = new Set();
-    base.filter(r=>r._anomes===refAM && r.nomevend===rep).forEach(r=>{
+    base.filter(r=>r._anomes>=startAM&&r._anomes<=endAM && r.nomevend===rep).forEach(r=>{
       const cad = cadastroMap.get(String(r.codcli));
       positSet.add(cad ? cadGrupoKey(cad, r.codcli) : String(r.codcli));
     });
@@ -3002,7 +3140,7 @@ function _showPositivados(mlHoje, refAM, base) {
   const todosCart = new Set();
   cadastroMap.forEach((cad, codcli) => todosCart.add(cadGrupoKey(cad, codcli)));
   const todosPosit = new Set();
-  base.filter(r=>r._anomes===refAM).forEach(r=>{
+  base.filter(r=>r._anomes>=startAM&&r._anomes<=endAM).forEach(r=>{
     const cad = cadastroMap.get(String(r.codcli));
     todosPosit.add(cad ? cadGrupoKey(cad, r.codcli) : String(r.codcli));
   });
@@ -3157,6 +3295,62 @@ const COLS_FAT_BONIF_CLI = [
   {key:'bonif',        label:'Bonificação',   rawKey:'_bonif'},
   {key:'pctBonif',     label:'% Bonif/Fat',   rawKey:'_pctBonifRaw'}
 ];
+
+// ── Clientes Novos Enxoval — modais ──────────────────────────────────────────
+let _enxovalData = null;
+
+function _showNovosEnxoval(k, startAM, endAM) {
+  const ne = k.novosEnxoval;
+  if (!ne) return;
+  const title = 'Clientes Novos — Enxoval — ' + periodLabel(startAM, endAM);
+  const COLS_CLI_ENX = [
+    {key:'nomecli',    label:'Cliente'},
+    {key:'codcli',     label:'Código'},
+    {key:'nomevend',   label:'Representante'},
+    {key:'fatVenda',   label:'Fat. 1ª Compra',  rawKey:'_fatVenda'},
+    {key:'fatBonif',   label:'Bonif. Enxoval',  rawKey:'_fatBonif'},
+    {key:'primCompra', label:'1ª Compra'}
+  ];
+  // Se rep está logado, mostra direto sua lista
+  const isRep = currentUser && currentUser.nomevend;
+  if (isRep) {
+    const allowed = new Set(currentUser.nomevend.map(v=>v.toUpperCase()));
+    const lista = ne.todos.filter(c=>allowed.has((c.nomevend||'').toUpperCase()));
+    showModal(title, lista, COLS_CLI_ENX, '_fatVenda');
+    return;
+  }
+  // Admin: agrupa por rep
+  const repMap = new Map();
+  ne.todos.forEach(c => {
+    const rep = c.nomevend||'N/D';
+    if (!repMap.has(rep)) repMap.set(rep, {nomevend:rep,_qtd:0,_fatVenda:0,_fatBonif:0,clientes:[]});
+    const r = repMap.get(rep);
+    r._qtd++; r._fatVenda+=c._fatVenda; r._fatBonif+=c._fatBonif; r.clientes.push(c);
+  });
+  const listRep = [...repMap.values()].sort((a,b)=>b._fatVenda-a._fatVenda).map(r=>({
+    ...r, qtd:r._qtd, fatVenda:fmtBRL(r._fatVenda),
+    fatBonif:r._fatBonif>0?fmtBRL(r._fatBonif):'—'
+  }));
+  _enxovalData = {listRep, repMap, startAM, endAM, COLS_CLI_ENX};
+  const COLS_REP_ENX = [
+    {key:'nomevend', label:'Representante'},
+    {key:'qtd',      label:'Novos Clientes'},
+    {key:'fatVenda', label:'Fat. Enxoval',   rawKey:'_fatVenda'},
+    {key:'fatBonif', label:'Bonif. Enxoval', rawKey:'_fatBonif'},
+    {label:'',render:r=>`<button class="btn-ver-cli" onclick="_enxovalDrill('${encodeURIComponent(r.nomevend)}')">Ver clientes →</button>`}
+  ];
+  showModal(title, listRep, COLS_REP_ENX, '_fatVenda');
+}
+
+function _enxovalDrill(repEnc) {
+  const rep = decodeURIComponent(repEnc);
+  if (!_enxovalData) return;
+  const {repMap, startAM, endAM, COLS_CLI_ENX} = _enxovalData;
+  const repData = repMap.get(rep);
+  if (!repData) return;
+  showModal(rep+' — Clientes Novos Enxoval — '+periodLabel(startAM,endAM),
+    repData.clientes, COLS_CLI_ENX, '_fatVenda');
+}
 
 function _showFatBonif(label, am) {
   const bBase = window._bonifFiltradoAtual || bonifBase;
