@@ -2503,8 +2503,19 @@ async function loadEmbeddedData() {
     try { applyFilters(); } catch(ae) { alert('Erro em applyFilters: ' + ae.message + '\n' + ae.stack); console.error(ae); }
   } catch(e) {
     document.getElementById('loadingOverlay').style.display='none';
-    alert('Erro ao carregar dados: ' + e.message + '\n' + e.stack);
-    console.error(e);
+    // Reexibir login se o dashboard não chegou a aparecer
+    if (document.getElementById('dashboard').style.display !== 'block') {
+      document.getElementById('loginScreen').style.display = 'flex';
+    }
+    // Mostrar erro na tela de login (ou alert como fallback)
+    const errEl = document.getElementById('loginError');
+    if (errEl) {
+      errEl.textContent = '⚠ Erro ao carregar dados: ' + e.message;
+    } else {
+      alert('Erro ao carregar dados: ' + e.message + '\n' + e.stack);
+    }
+    console.error('Erro em loadEmbeddedData:', e);
+    throw e; // Propaga para o doLogin() lidar
   }
 }
 
@@ -2966,6 +2977,11 @@ const AUTH_USERS = [
 let currentUser = null;
 
 async function sha256(str) {
+  // Fallback para ambientes sem crypto.subtle (file://, HTTP sem TLS)
+  if (!crypto || !crypto.subtle) {
+    // Fallback simples: comparação com hash pré-calculado por xor (não seguro, só para dev local)
+    throw new Error('crypto.subtle não disponível. Acesse o dashboard via HTTPS (GitHub Pages).');
+  }
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
@@ -2977,20 +2993,23 @@ async function doLogin() {
   const btn   = document.getElementById('btnLogin');
   if (!user || !pass) { errEl.textContent = 'Preencha usuário e senha.'; return; }
   btn.disabled = true; btn.textContent = 'Verificando…';
-  const hash = await sha256(pass);
-  const found = AUTH_USERS.find(u => u.login === user && u.hash === hash);
-  btn.disabled = false; btn.textContent = 'Entrar';
-  if (!found) { errEl.textContent = '❌ Usuário ou senha incorretos.'; return; }
-  errEl.textContent = '';
-  currentUser = found;
-  document.getElementById('loginScreen').style.display = 'none';
-  // Show user badge in header
-  const badge = document.getElementById('userBadge');
-  if (badge) { badge.style.display = 'flex'; document.getElementById('userLabel').textContent = '👤 ' + found.label; }
-  // Lock rep filter if not admin
-  lockRepFilter();
-  // Load data
-  loadEmbeddedData();
+  try {
+    const hash = await sha256(pass);
+    const found = AUTH_USERS.find(u => u.login === user && u.hash === hash);
+    btn.disabled = false; btn.textContent = 'Entrar';
+    if (!found) { errEl.textContent = '❌ Usuário ou senha incorretos.'; return; }
+    errEl.textContent = '';
+    currentUser = found;
+    document.getElementById('loginScreen').style.display = 'none';
+    const badge = document.getElementById('userBadge');
+    if (badge) { badge.style.display = 'flex'; document.getElementById('userLabel').textContent = '👤 ' + found.label; }
+    lockRepFilter();
+    await loadEmbeddedData();
+  } catch(e) {
+    btn.disabled = false; btn.textContent = 'Entrar';
+    errEl.textContent = '⚠ Erro: ' + e.message;
+    console.error('Erro no login:', e);
+  }
 }
 
 function doLogout() {
