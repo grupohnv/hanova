@@ -1789,16 +1789,14 @@ function updateDOM(k, mesRef, repLabel, startAM, endAM) {
   { const ne = k.novosEnxoval;
     const elCard = document.getElementById('cardNovosEnxovalFat');
     if (ne && elCard) {
+      elCard.style.display = '';
+      const pctEnxoval = ne.totalFatVenda > 0 ? (ne.totalFatBonif / ne.totalFatVenda * 100).toFixed(1) : '0.0';
+      set('kNovosEnxovalFat', ne.totalClientes > 0 ? ne.totalClientes + ' clientes' : '0 clientes');
+      set('kNovosEnxovalFatSub', ne.totalFatVenda > 0 ? fmtBRL(ne.totalFatVenda) + ' · bonif ' + pctEnxoval + '% do fat.' : 'Sem novos clientes no período');
+      const elB = document.getElementById('kNovosEnxovalFatBonif');
+      if (elB) elB.textContent = ne.totalFatBonif > 0 ? '🎁 Bonif enxoval: ' + fmtBRL(ne.totalFatBonif) : '';
       if (ne.totalClientes > 0 || ne.totalFatVenda > 0) {
-        elCard.style.display = '';
-        const pctEnxoval = ne.totalFatVenda > 0 ? (ne.totalFatBonif / ne.totalFatVenda * 100).toFixed(1) : '0.0';
-        set('kNovosEnxovalFat', ne.totalClientes + ' clientes');
-        set('kNovosEnxovalFatSub', fmtBRL(ne.totalFatVenda) + ' · bonif ' + pctEnxoval + '% do fat.');
-        const elB = document.getElementById('kNovosEnxovalFatBonif');
-        if (elB) elB.textContent = ne.totalFatBonif > 0 ? '🎁 Bonif enxoval: ' + fmtBRL(ne.totalFatBonif) : '';
         setClick('cardNovosEnxovalFat', () => _showNovosEnxoval(k, startAM, endAM));
-      } else {
-        elCard.style.display = 'none';
       }
     }
   }
