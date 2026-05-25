@@ -383,7 +383,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
     <div class="sec-title">💰 Faturamento</div>
     <div class="g5">
       <div class="card kpi-card kg" style="padding:12px 14px">
-        <div class="ct">Faturamento Mês Atual</div>
+        <div class="ct">Faturamento no Período</div>
         <div class="cv" id="kFatAtual">—</div>
         <div class="cs" id="kFatAtualSub"></div>
         <div id="kFatAtualBadge"></div>
@@ -415,12 +415,11 @@ tr:hover td{background:rgba(255,255,255,.03)}
         <div class="cs" id="kBonifSub"></div>
         <div id="kBonifBadge"></div>
       </div>
-      <div class="card kpi-card kp" id="cardMetaCli" style="padding:12px 14px;cursor:pointer;display:none">
-        <div class="ct">Meta por Cliente 🎯</div>
-        <div class="cv" id="kMetaCliPct">—</div>
-        <div class="cv2" id="kMetaCliValores" style="font-size:0.95rem;color:var(--muted);margin:2px 0"></div>
-        <div class="cs" id="kMetaCliSub">clientes com meta definida</div>
-        <div class="prog" id="kMetaCliProg"></div>
+      <div class="card kpi-card kg" id="cardNovosEnxovalFat" style="padding:12px 14px;cursor:pointer;display:none">
+        <div class="ct">Clientes Novos — Enxoval 🛍</div>
+        <div class="cv" id="kNovosEnxovalFat">—</div>
+        <div class="cs" id="kNovosEnxovalFatSub"></div>
+        <div class="cs" id="kNovosEnxovalFatBonif" style="margin-top:4px;font-size:0.78rem;color:#f59e0b"></div>
       </div>
     </div>
 
@@ -452,17 +451,6 @@ tr:hover td{background:rgba(255,255,255,.03)}
       </div>
     </div>
 
-
-    <!-- CLIENTES NOVOS ENXOVAL -->
-    <div class="sec-title">🛍 Enxoval</div>
-    <div class="g5">
-      <div class="card kpi-card kg" id="cardNovosEnxoval" style="padding:12px 14px;cursor:pointer;display:none">
-        <div class="ct">Clientes Novos — Enxoval 🛍</div>
-        <div class="cv" id="kNovosEnxoval">—</div>
-        <div class="cs" id="kNovosEnxovalSub"></div>
-        <div class="cs" id="kNovosEnxovalBonif" style="margin-top:4px;font-size:0.78rem;color:#f59e0b"></div>
-      </div>
-    </div>
 
     <!-- REALIZADO MÊS ATUAL -->
     <div class="sec-title" id="secRealizadoTitle">🎯 Realizado — Mês Atual</div>
@@ -1118,17 +1106,17 @@ function computeKPIs(base, mesRef, meta, allowedReps, bonif, startAM, endAM) {
   endAM   = endAM   || refAM;
 
   // ── FATURAMENTO — period-aware ────────────────
-  const _prev = prevEquivPeriod(startAM, endAM);
-  const _lyr  = samePerioLastYear(startAM, endAM);
+  // fatAtual = soma do período; fatAnt/fatAnoAnt = mês único de referência (mês anterior ao endAM)
+  const antAM    = prevAnoMes(endAM, 1);                                       // mês imediatamente anterior ao fim do período
+  const anoAntAM = (Math.floor(endAM/100)-1)*100 + (endAM%100);               // mesmo mês do endAM, ano anterior
   const fatAtual   = sumValorPeriodo(base, startAM, endAM);
-  const fatAnt     = sumValorPeriodo(base, _prev.s, _prev.e);
-  const fatAnoAnt  = sumValorPeriodo(base, _lyr.s, _lyr.e);
-  const antAM      = _prev.e; // mantido para labels de comparação
+  const fatAnt     = sumValorAM(base, antAM);
+  const fatAnoAnt  = sumValorAM(base, anoAntAM);
 
   // ── BONIFICAÇÕES — period-aware ───────────────
   const _bonif = bonif || [];
   const bonifAtual   = sumValorPeriodo(_bonif, startAM, endAM);
-  const bonifAnt     = sumValorPeriodo(_bonif, _prev.s, _prev.e);
+  const bonifAnt     = sumValorAM(_bonif, antAM);
   const bonifPctFat  = fatAtual > 0 ? +(bonifAtual / fatAtual * 100).toFixed(1) : 0;
   const bonifPctAnt  = fatAnt   > 0 ? +(bonifAnt   / fatAnt   * 100).toFixed(1) : 0;
 
@@ -1164,12 +1152,14 @@ function computeKPIs(base, mesRef, meta, allowedReps, bonif, startAM, endAM) {
   // ── COMPORTAMENTO ─────────────────────────────
   const comp = calcComportamento(clienteMap, endAM);
 
-  // ── REALIZADO — período selecionado ───────────
-  const fatHoje    = sumValorPeriodo(base, startAM, endAM);
-  const inAtivados = calcInativosAtivados(clienteMap, startAM, endAM);
-  const dimCiclo   = calcDiminuiramCiclo(clienteMap);
-  const aumSku     = calcAumentaramSku(clienteMap);
-  const positivados = calcPositivados(base, startAM, endAM);
+  // ── REALIZADO — usa sempre a data real do sistema (mês corrente) ─────────
+  const _hoje2 = new Date();
+  const refHojeReal = _hoje2.getFullYear()*100 + (_hoje2.getMonth()+1);
+  const fatHoje     = sumValorAM(base, refHojeReal);
+  const inAtivados  = calcInativosAtivados(clienteMap, refHojeReal, refHojeReal);
+  const dimCiclo    = calcDiminuiramCiclo(clienteMap);
+  const aumSku      = calcAumentaramSku(clienteMap);
+  const positivados = calcPositivados(base, refHojeReal, refHojeReal);
 
   // ── TOP / BOTTOM PRODUTOS ─────────────────────
   const topProd = calcTopProd(base);
@@ -1178,7 +1168,7 @@ function computeKPIs(base, mesRef, meta, allowedReps, bonif, startAM, endAM) {
   const repReal = calcRepReal(base, startAM, endAM);
 
   _clienteMapGlobal = clienteMap;
-  const metaCli   = calcMetaPorCliente(base, metaMap, endAM, clienteMap, allowedReps);
+  const metaCli   = calcMetaPorCliente(base, metaMap, endAM, clienteMap, allowedReps, startAM, endAM);
   const exQuentes = calcExQuentes(clienteMap, mesRef);
 
   // ── CLIENTES NOVOS ENXOVAL ────────────────────
@@ -1195,12 +1185,13 @@ function computeKPIs(base, mesRef, meta, allowedReps, bonif, startAM, endAM) {
     mixMenor30PorRep: calcMixMenor30PorRep(skuStats.lMenosTrinta),
     metaCli, exQuentes,
     bonifAtual, bonifAnt, bonifPctFat, bonifPctAnt, bonifMensal,
-    novosEnxoval, startAM, endAM,
+    novosEnxoval, startAM, endAM, antAM, anoAntAM, refHojeReal,
     _base: base,
   };
 }
 
-function calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps) {
+function calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps, startAM, endAM) {
+  startAM = startAM || refAM; endAM = endAM || refAM;
   const lCli = [], repMap = new Map();
 
   function _ticketMedCalc(cli) {
@@ -1245,7 +1236,7 @@ function calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps) {
   consolidatedMeta.forEach(({ nomecli, nomevend, _meta: metaVal }, key) => {
     const cli = clienteMap.get(key);
     if (allowedReps && !allowedReps.has((nomevend||'').toUpperCase())) return;
-    const real = cli ? cli.rows.filter(r=>r._anomes===refAM).reduce((s,r)=>s+r.valor,0) : 0;
+    const real = cli ? cli.rows.filter(r=>r._anomes>=startAM&&r._anomes<=endAM).reduce((s,r)=>s+r.valor,0) : 0;
     const pct  = metaVal > 0 ? +(real/metaVal*100).toFixed(1) : 0;
     const _uc = _ultCompraCalc(cli); const _dc = _diasCalc(_uc);
     lCli.push({ nomecli, codcli: key, nomevend, _meta:metaVal, meta:fmtBRL(metaVal), _real:real, realizado:fmtBRL(real),
@@ -1261,8 +1252,8 @@ function calcMetaPorCliente(base, metaMap, refAM, clienteMap, allowedReps) {
   // 2. Clientes SEM meta mas com pedido > 0 no mês de referência
   clienteMap.forEach((cli, key) => {
     if (metaKeysProcessadas.has(key)) return; // já incluído acima via meta consolidada
-    const real = cli.rows.filter(r=>r._anomes===refAM).reduce((s,r)=>s+r.valor,0);
-    if (real <= 0) return; // sem pedido no mês, não inclui
+    const real = cli.rows.filter(r=>r._anomes>=startAM&&r._anomes<=endAM).reduce((s,r)=>s+r.valor,0);
+    if (real <= 0) return; // sem pedido no período, não inclui
     const nomevend = cli.nomevend||'N/D';
     if (allowedReps && !allowedReps.has((nomevend||'').toUpperCase())) return;
     const _uc2 = _ultCompraCalc(cli); const _dc2 = _diasCalc(_uc2);
@@ -1704,7 +1695,12 @@ function updateDOM(k, mesRef, repLabel, startAM, endAM) {
   startAM = startAM || mesRef.ano*100+mesRef.mes;
   endAM   = endAM   || mesRef.ano*100+mesRef.mes;
   const ml = periodLabel(startAM, endAM);
-  const refHojeAM = endAM; // usa fim do período selecionado como referência de "hoje"
+  // antAM e anoAntAM vêm do KPI (mês único de comparação baseado no endAM)
+  const antAM    = k.antAM    || prevAnoMes(endAM, 1);
+  const anoAntAM = k.anoAntAM || (Math.floor(endAM/100)-1)*100+(endAM%100);
+  // Realizado usa sempre a data real do sistema
+  const refHojeReal = k.refHojeReal || (new Date().getFullYear()*100+(new Date().getMonth()+1));
+  const mlHojeReal  = anoMesToLabel(refHojeReal);
 
   // FATURAMENTO
   set('kFatAtual', fmtBRL(k.fatAtual));
@@ -1735,10 +1731,10 @@ function updateDOM(k, mesRef, repLabel, startAM, endAM) {
   }
 
   set('kFatAnt', fmtBRL(k.fatAnt));
-  set('kFatAntSub', anoMesToLabel(prevAnoMes(mesRef.ano*100+mesRef.mes,1)));
+  set('kFatAntSub', anoMesToLabel(antAM));
 
   set('kFatAnoAnt', fmtBRL(k.fatAnoAnt));
-  set('kFatAnoAntSub', `${meses_pt[mesRef.mes]} / ${mesRef.ano-1}`);
+  set('kFatAnoAntSub', anoMesToLabel(anoAntAM));
   badge('kFatAnoAntBadge', k.fatAtual, k.fatAnoAnt, 'vs mesmo mês ano anterior');
 
   // META — usa dados dos arquivos (metaCli) se disponíveis, senão usa campo manual
@@ -1789,18 +1785,21 @@ function updateDOM(k, mesRef, repLabel, startAM, endAM) {
   set('kExQuentes', k.exQuentes ? k.exQuentes.total : 0);
   set('kExQuentesSub', k.exQuentes && k.exQuentes.total > 0 ? k.exQuentes.total + ' clientes saíram da janela' : 'nenhum no período');
 
-  // META POR CLIENTE
-  if (k.metaCli && k.metaCli.totalMeta > 0) {
-    document.getElementById('cardMetaCli').style.display = '';
-    set('kMetaCliPct', k.metaCli.pct.toFixed(1) + '%');
-    set('kMetaCliValores', fmtBRL(k.metaCli.totalReal) + ' de ' + fmtBRL(k.metaCli.totalMeta));
-    set('kMetaCliSub', k.metaCli.lCli.length + ' clientes com meta definida');
-    const pct2 = k.metaCli.pct;
-    const clr2 = pct2>=100?'gr':pct2>=70?'':'rd';
-    const progHtml = '<div class="prog"><div class="prog-lbl"><span>0</span><span>' + fmtBRL(k.metaCli.totalMeta) + '</span></div><div class="prog-bar"><div class="prog-fill ' + clr2 + '" style="width:' + Math.min(pct2,100) + '%"></div></div></div>';
-    document.getElementById('kMetaCliProg').innerHTML = progHtml;
-  } else if (document.getElementById('cardMetaCli')) {
-    document.getElementById('cardMetaCli').style.display = 'none';
+  // CLIENTES NOVOS ENXOVAL (no lugar do antigo Meta por Cliente)
+  { const ne = k.novosEnxoval;
+    const elCard = document.getElementById('cardNovosEnxovalFat');
+    if (ne && elCard) {
+      if (ne.totalClientes > 0 || ne.totalFatVenda > 0) {
+        elCard.style.display = '';
+        set('kNovosEnxovalFat', ne.totalClientes + ' clientes');
+        set('kNovosEnxovalFatSub', fmtBRL(ne.totalFatVenda) + ' em fat. enxoval');
+        const elB = document.getElementById('kNovosEnxovalFatBonif');
+        if (elB) elB.textContent = ne.totalFatBonif > 0 ? '🎁 Bonif enxoval: ' + fmtBRL(ne.totalFatBonif) : '';
+        setClick('cardNovosEnxovalFat', () => _showNovosEnxoval(k, startAM, endAM));
+      } else {
+        elCard.style.display = 'none';
+      }
+    }
   }
 
   // QUENTES
@@ -1855,28 +1854,29 @@ function updateDOM(k, mesRef, repLabel, startAM, endAM) {
     `Faturamento Mensal${repLabel!=='TODOS' ? ' · '+repLabel : ''}`;
 
 
-  // Atualiza título da seção Realizado
+  // Atualiza título da seção Realizado (sempre mês corrente do sistema)
   { const el = document.getElementById('secRealizadoTitle');
-    if (el) el.textContent = '🎯 Realizado — ' + ml; }
+    if (el) el.textContent = '🎯 Realizado — ' + mlHojeReal; }
 
-  // FATURAMENTO DO PERÍODO (seção Realizado)
-  const mlHoje = ml; // alias para compatibilidade com código abaixo
+  // FATURAMENTO MÊS ATUAL (seção Realizado — sempre mês corrente do sistema)
+  const mlHoje = mlHojeReal;
   set('kFatHoje', fmtBRL(k.fatHoje));
-  set('kFatHojeSub', 'faturado em ' + ml);
-  const fatHojeVsAnt = k.fatHoje > 0 && k.fatAnt > 0 ? ((k.fatHoje - k.fatAnt) / k.fatAnt * 100).toFixed(1) : null;
+  set('kFatHojeSub', 'faturado em ' + mlHojeReal);
+  const _antHoje = prevAnoMes(refHojeReal, 1);
+  const fatHojeVsAnt = k.fatHoje > 0 ? ((k.fatHoje - sumValorAM(k._base||[], _antHoje)) / (sumValorAM(k._base||[], _antHoje)||1) * 100).toFixed(1) : null;
   document.getElementById('kFatHojeBadge').innerHTML = fatHojeVsAnt !== null
-    ? `<span class="cbadge ${fatHojeVsAnt >= 0 ? 'cup' : 'cdn'}">${fatHojeVsAnt >= 0 ? '▲' : '▼'} ${Math.abs(fatHojeVsAnt)}% vs período anterior</span>` : '';
+    ? `<span class="cbadge ${fatHojeVsAnt >= 0 ? 'cup' : 'cdn'}">${fatHojeVsAnt >= 0 ? '▲' : '▼'} ${Math.abs(fatHojeVsAnt)}% vs mês anterior</span>` : '';
 
-  // POSITIVADOS
+  // POSITIVADOS (mês corrente do sistema)
   set('kPositivados', k.positivados.positivados + ' / ' + k.positivados.carteira);
-  set('kPositivadosSub', k.positivados.pct + '% da carteira compraram em ' + ml);
+  set('kPositivadosSub', k.positivados.pct + '% da carteira compraram em ' + mlHojeReal);
   document.getElementById('kPositivadosProg').innerHTML =
     `<div class="prog"><div class="prog-lbl"><span>0</span><span>${k.positivados.carteira}</span></div>
     <div class="prog-bar"><div class="prog-fill gr" style="width:${Math.min(parseFloat(k.positivados.pct),100)}%"></div></div></div>`;
 
-  // INATIVOS ATIVADOS
+  // INATIVOS ATIVADOS (mês corrente do sistema)
   set('kInAtivados', k.inAtivados.total);
-  set('kInAtivadosSub', 'clientes inativos que compraram em ' + ml);
+  set('kInAtivadosSub', 'clientes inativos que compraram em ' + mlHojeReal);
   document.getElementById('kInAtivadosBadge').innerHTML = k.inAtivados.total>0
     ? '<span class="cbadge cup">▲ Reativações no mês</span>' : '';
 
@@ -1896,7 +1896,7 @@ function updateDOM(k, mesRef, repLabel, startAM, endAM) {
   const _listaFatHoje = () => {
     const cliMc = buildClienteMapConsolidado(k._base||[]);
     return [...cliMc.values()].map(c => {
-      const _valor = c.rows.filter(r=>r._anomes>=startAM&&r._anomes<=endAM).reduce((s,r)=>s+r.valor,0);
+      const _valor = c.rows.filter(r=>r._anomes===refHojeReal).reduce((s,r)=>s+r.valor,0);
       if (_valor <= 0) return null;
       const rowsPos = c.rows.filter(r=>r.valor>0);
       const ams = [...new Set(rowsPos.map(r=>r._anomes).filter(Boolean))].sort((a,b)=>b-a);
@@ -1915,28 +1915,11 @@ function updateDOM(k, mesRef, repLabel, startAM, endAM) {
     {key:'ticketMedio',label:'Ticket Médio', rawKey:'_ticketMed'},
     {key:'ultCompra',  label:'Últ. Compra',  rawKey:'_ultCompra', noRawExcel:true}
   ];
-  setClick('kFatHoje',    ()=>_showByRep('Faturamento — '+ml, _listaFatHoje(), COLS_FAT_HOJ));
-  setClick('kPositivados',()=>_showPositivados(ml, startAM, endAM, k._base||[]));
+  setClick('kFatHoje',    ()=>_showByRep('Faturamento — '+mlHojeReal, _listaFatHoje(), COLS_FAT_HOJ));
+  setClick('kPositivados',()=>_showPositivados(mlHojeReal, refHojeReal, refHojeReal, k._base||[]));
   setClick('kInAtivados', ()=>_showByRep('Inativos Ativados — '+mlHoje, k.inAtivados.lista, COLS_INATIV, '_valorMesNum'));
   setClick('kDimCiclo',   ()=>_showByRep('Aceleraram Ciclo de Compra', k.dimCiclo.lista, COLS_CICV, '_valorTotal'));
   setClick('kAumSku',     ()=>_showByRep('Aumentaram SKU', k.aumSku.lista, COLS_SKUV, '_valorTotal'));
-
-  // CLIENTES NOVOS ENXOVAL
-  { const ne = k.novosEnxoval;
-    const elCard = document.getElementById('cardNovosEnxoval');
-    if (ne && elCard) {
-      if (ne.totalClientes > 0 || ne.totalFatVenda > 0) {
-        elCard.style.display = '';
-        set('kNovosEnxoval', ne.totalClientes + ' clientes');
-        set('kNovosEnxovalSub', fmtBRL(ne.totalFatVenda) + ' em fat. enxoval');
-        const elB = document.getElementById('kNovosEnxovalBonif');
-        if (elB) elB.textContent = ne.totalFatBonif > 0 ? '🎁 Bonif enxoval: ' + fmtBRL(ne.totalFatBonif) : '';
-        setClick('cardNovosEnxoval', () => _showNovosEnxoval(k, startAM, endAM));
-      } else {
-        elCard.style.display = 'none';
-      }
-    }
-  }
 
   updateDiretorPanel(k);
 
