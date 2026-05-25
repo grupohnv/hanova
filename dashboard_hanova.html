@@ -2499,16 +2499,15 @@ async function loadEmbeddedData() {
     document.getElementById('dashboard').style.display='block';
     const el=document.getElementById('dadosAtualizadosEm');
     if(el) el.textContent='Dados de '+DADOS_ATUALIZADOS_EM;
-    applyFilters();
+    try { applyFilters(); } catch(ae) { alert('Erro em applyFilters: ' + ae.message + '\n' + ae.stack); console.error(ae); }
   } catch(e) {
     document.getElementById('loadingOverlay').style.display='none';
-    const er=document.getElementById('loadingError');
-    if(er){er.style.display='block';er.textContent='Erro: '+e.message;}
+    alert('Erro ao carregar dados: ' + e.message + '\n' + e.stack);
     console.error(e);
   }
 }
 
-document.addEventListener('DOMContentLoaded', loadEmbeddedData);
+// Carregamento de dados iniciado pelo doLogin() — não há auto-load no DOMContentLoaded
 
 // Drag-and-drop support
 ['dz-dados','dz-cadastro','dz-produtos'].forEach(id=>{
