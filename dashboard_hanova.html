@@ -1791,9 +1791,9 @@ function updateDOM(k, mesRef, repLabel, startAM, endAM) {
     if (ne && elCard) {
       if (ne.totalClientes > 0 || ne.totalFatVenda > 0) {
         elCard.style.display = '';
-        const pctEnxoval = k.fatAtual > 0 ? (ne.totalFatVenda / k.fatAtual * 100).toFixed(1) : '0.0';
+        const pctEnxoval = ne.totalFatVenda > 0 ? (ne.totalFatBonif / ne.totalFatVenda * 100).toFixed(1) : '0.0';
         set('kNovosEnxovalFat', ne.totalClientes + ' clientes');
-        set('kNovosEnxovalFatSub', fmtBRL(ne.totalFatVenda) + ' · ' + pctEnxoval + '% do faturamento');
+        set('kNovosEnxovalFatSub', fmtBRL(ne.totalFatVenda) + ' · bonif ' + pctEnxoval + '% do fat.');
         const elB = document.getElementById('kNovosEnxovalFatBonif');
         if (elB) elB.textContent = ne.totalFatBonif > 0 ? '🎁 Bonif enxoval: ' + fmtBRL(ne.totalFatBonif) : '';
         setClick('cardNovosEnxovalFat', () => _showNovosEnxoval(k, startAM, endAM));
