@@ -1936,9 +1936,7 @@ function updateDOM(k, mesRef, repLabel, startAM, endAM) {
   setClick('kRedSkuR', ()=>_showByRep('Clientes que Diminuíram SKU', k.comp.lRedSku, COLS_RSKU, 'skusCadastrados'));
 
   // ONCLICK NOS CARDS
-  const refAM = mesRef.ano*100+mesRef.mes;
-  const antAM = prevAnoMes(refAM,1);
-  const anoAntAM = (mesRef.ano-1)*100+mesRef.mes;
+  const refAM = endAM; // endAM = fim do período selecionado
   const COLS_FAT = [...COLS_CLI,{key:'valor',label:'Faturamento'}];
 
   function cliMes(am) {
