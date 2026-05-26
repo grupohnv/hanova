@@ -3407,10 +3407,17 @@ function _showFatBonif(label, am) {
     currentKpis.metaCli.lCli.forEach(r => { metaCliMap[String(r.codcli)] = r._meta || 0; });
   }
 
+  // Garante que TODOS os representantes aparecem, mesmo sem faturamento no período
+  const allReps = new Set();
+  cadastroMap.forEach(cad => { if (cad.nomevend && cad.nomevend !== 'N/D') allReps.add(cad.nomevend); });
+  allReps.forEach(rep => {
+    if (!repMap[rep]) repMap[rep] = {nomevend:rep, _fat:0, _bonif:0, lista:[]};
+  });
+
   const repLista = Object.values(repMap).map(r=>({
     ...r,
     clientes:r.lista.length,
-    fat:fmtBRL(r._fat), bonif:fmtBRL(r._bonif),
+    fat:fmtBRL(r._fat), bonif:r._bonif>0?fmtBRL(r._bonif):'—',
     pctBonif: r._fat>0 ? (r._bonif/r._fat*100).toFixed(1)+'%' : '—',
     _pctBonifRaw: r._fat>0 ? r._bonif/r._fat*100 : 0,
     _meta: metaRepMap[(r.nomevend||'').toUpperCase()] || 0,
