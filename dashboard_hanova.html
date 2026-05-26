@@ -3819,5 +3819,22 @@ function updateDiretorPanel(k) {
   </div>
 </div>
 
+<script>
+function doLogin() {
+    const user = document.getElementById("loginUser").value.trim();
+    const pass = document.getElementById("loginPass").value.trim();
+
+    const usuarios = {
+        "luizgustavo": "hanova@2026"
+    };
+
+    if (usuarios[user] === pass) {
+        document.getElementById("loginScreen").style.display = "none";
+        document.getElementById("dashboard").style.display = "block";
+    } else {
+        alert("Usuário ou senha incorretos.");
+    }
+}
+</script>
 </body>
 </html>
