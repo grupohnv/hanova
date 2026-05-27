@@ -3408,11 +3408,14 @@ function _showFatBonif(label, am) {
   }
 
   // Garante que TODOS os representantes aparecem, mesmo sem faturamento no período
-  const allReps = new Set();
-  cadastroMap.forEach(cad => { if (cad.nomevend && cad.nomevend !== 'N/D') allReps.add(cad.nomevend); });
-  allReps.forEach(rep => {
-    if (!repMap[rep]) repMap[rep] = {nomevend:rep, _fat:0, _bonif:0, lista:[]};
-  });
+  // (somente admin — rep já tem dados filtrados apenas para sua carteira)
+  if (!currentUser || !currentUser.nomevend) {
+    const allReps = new Set();
+    cadastroMap.forEach(cad => { if (cad.nomevend && cad.nomevend !== 'N/D') allReps.add(cad.nomevend); });
+    allReps.forEach(rep => {
+      if (!repMap[rep]) repMap[rep] = {nomevend:rep, _fat:0, _bonif:0, lista:[]};
+    });
+  }
 
   const repLista = Object.values(repMap).map(r=>({
     ...r,
@@ -3450,6 +3453,11 @@ function _showFatBonif(label, am) {
     {key:'pctBonif',  label:'% Bonif/Fat',   rawKey:'_pctBonifRaw'},
     {label:'Detalhe', render:(_,i)=>`<button class="btn-ver-cli" onclick="_fatBonifDrillClients(${i})">Ver clientes →</button>`}
   ];
+  // Rep: mostra direto sua lista de clientes (já filtrada), sem nível de representante intermediário
+  if (currentUser && currentUser.nomevend) {
+    showModal(title + ' — ' + currentUser.label, cliLista, COLS_FAT_BONIF_CLI);
+    return;
+  }
   showModal(title+' — por Representante', repLista, COLS_REP);
 }
 
